@@ -391,6 +391,15 @@ FACTORY_SIM_HTML = """
     <div class="dash-grid" id="sysMetrics"></div>
   </div>
 
+  <!-- Utilization History Chart -->
+  <div class="dash-section">
+    <div class="dash-title">Station Utilization Over Time</div>
+    <div style="background:#0e1117; border-radius:0 0 8px 8px; padding:8px;">
+      <canvas id="utilChart" style="width:100%; height:180px;"></canvas>
+      <div id="utilLegend" style="display:flex; flex-wrap:wrap; gap:8px 16px; padding:6px 4px 2px; font-size:10px;"></div>
+    </div>
+  </div>
+
   <!-- Station Details Table -->
   <div class="dash-section">
     <div class="dash-title">Station Details (Live)</div>
@@ -936,6 +945,8 @@ function togglePlay() {
 }
 function resetSim() {
   engine.reset(); engine.running = true;
+  utilHistory = []; lastHistoryUpdate = 0;
+  utilLegendEl.innerHTML = '';
   document.getElementById('playBtn').textContent = 'Pause';
   document.getElementById('playBtn').classList.add('active');
   showToast('Simulation reset');
@@ -1081,6 +1092,139 @@ function dashCard(label, value, sub) {
   return '<div class="dash-card"><div class="label">' + label + '</div><div class="value">' + value + '</div><div class="sub">' + sub + '</div></div>';
 }
 
+// ── UTILIZATION HISTORY CHART ──
+const utilChartCanvas = document.getElementById('utilChart');
+const utilChartCtx = utilChartCanvas.getContext('2d');
+const utilLegendEl = document.getElementById('utilLegend');
+
+// Station colors — distinct palette for up to 8 stations
+const stationColors = ['#00d4aa', '#f39c12', '#e74c3c', '#3498db', '#9b59b6', '#1abc9c', '#e67e22', '#2ecc71'];
+
+// History storage: array of { time, utils: [u0, u1, ...] }
+let utilHistory = [];
+const MAX_HISTORY = 300; // max data points
+let lastHistoryUpdate = 0;
+
+function recordUtilHistory() {
+  const now = Date.now();
+  if (now - lastHistoryUpdate < 1000) return; // sample every 1s
+  lastHistoryUpdate = now;
+  if (engine.simTime <= 0) return;
+  const utils = engine.stations.map(st => st.utilization);
+  utilHistory.push({ time: engine.simTime, utils });
+  if (utilHistory.length > MAX_HISTORY) utilHistory.shift();
+}
+
+function drawUtilChart() {
+  const c = utilChartCanvas;
+  const dpr = window.devicePixelRatio || 1;
+  const w = c.parentElement.clientWidth - 16;
+  const h = 180;
+  c.style.width = w + 'px';
+  c.style.height = h + 'px';
+  c.width = w * dpr;
+  c.height = h * dpr;
+  const ctx = utilChartCtx;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+  // Background
+  ctx.fillStyle = '#0e1117';
+  ctx.fillRect(0, 0, w, h);
+
+  const pad = { l: 40, r: 12, t: 8, b: 24 };
+  const cw = w - pad.l - pad.r;
+  const ch = h - pad.t - pad.b;
+
+  if (utilHistory.length < 2) {
+    ctx.fillStyle = '#555';
+    ctx.font = '11px Inter,system-ui,sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Waiting for data...', w / 2, h / 2);
+    return;
+  }
+
+  const minT = utilHistory[0].time;
+  const maxT = utilHistory[utilHistory.length - 1].time;
+  const tRange = maxT - minT || 1;
+
+  // Grid lines and Y axis labels (0%, 25%, 50%, 75%, 100%)
+  ctx.strokeStyle = '#1a1f2e';
+  ctx.lineWidth = 1;
+  ctx.font = '9px Inter,system-ui,sans-serif';
+  ctx.textAlign = 'right';
+  for (let pct = 0; pct <= 100; pct += 25) {
+    const y = pad.t + ch - (pct / 100) * ch;
+    ctx.beginPath();
+    ctx.moveTo(pad.l, y);
+    ctx.lineTo(w - pad.r, y);
+    ctx.stroke();
+    ctx.fillStyle = '#666';
+    ctx.fillText(pct + '%', pad.l - 4, y + 3);
+  }
+
+  // Danger zone (85% line)
+  const dangerY = pad.t + ch - (0.85) * ch;
+  ctx.strokeStyle = 'rgba(231, 76, 60, 0.3)';
+  ctx.setLineDash([4, 4]);
+  ctx.beginPath();
+  ctx.moveTo(pad.l, dangerY);
+  ctx.lineTo(w - pad.r, dangerY);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // X axis time labels
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#666';
+  const nLabels = Math.min(6, Math.floor(cw / 60));
+  for (let i = 0; i <= nLabels; i++) {
+    const t = minT + (tRange * i / nLabels);
+    const x = pad.l + (cw * i / nLabels);
+    const hrs = Math.floor(t / 60);
+    const mins = Math.floor(t % 60);
+    ctx.fillText((hrs < 10 ? '0' : '') + hrs + ':' + (mins < 10 ? '0' : '') + mins, x, h - 4);
+  }
+
+  // Draw lines for each station
+  const n = engine.stations.length;
+  for (let si = 0; si < n; si++) {
+    const col = stationColors[si % stationColors.length];
+    ctx.strokeStyle = col;
+    ctx.lineWidth = 1.5;
+    ctx.globalAlpha = 0.9;
+    ctx.beginPath();
+    let started = false;
+    for (let di = 0; di < utilHistory.length; di++) {
+      const d = utilHistory[di];
+      const x = pad.l + ((d.time - minT) / tRange) * cw;
+      const y = pad.t + ch - Math.min(1, d.utils[si]) * ch;
+      if (!started) { ctx.moveTo(x, y); started = true; }
+      else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+
+  // Current values as dots at the right edge
+  const last = utilHistory[utilHistory.length - 1];
+  for (let si = 0; si < n; si++) {
+    const col = stationColors[si % stationColors.length];
+    const x = pad.l + cw;
+    const y = pad.t + ch - Math.min(1, last.utils[si]) * ch;
+    ctx.fillStyle = col;
+    ctx.beginPath();
+    ctx.arc(x, y, 3, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+function updateUtilLegend() {
+  if (utilLegendEl.children.length > 0) return; // only build once
+  engine.stations.forEach((st, i) => {
+    const col = stationColors[i % stationColors.length];
+    utilLegendEl.innerHTML += '<span style="color:' + col + '">● ' + st.name + '</span>';
+  });
+}
+
 // Log initial event
 logEvent('info', 'Simulation started — ' + engine.stations.length + ' stations, target: ' + engine.target.toLocaleString() + ' units');
 
@@ -1101,6 +1245,9 @@ function animate() {
   renderer.draw();
   clockEl.textContent = renderer.fmtTime(engine.simTime) + ' / ' + shiftStr;
   updateDashboard();
+  recordUtilHistory();
+  drawUtilChart();
+  updateUtilLegend();
   checkMilestones();
   requestAnimationFrame(animate);
 }
@@ -2011,7 +2158,7 @@ if 'result' in st.session_state:
 
     sim_json = json.dumps(sim_config)
     factory_html = FACTORY_SIM_HTML.replace("__SIM_CONFIG__", sim_json)
-    st.components.v1.html(factory_html, height=930, scrolling=False)
+    st.components.v1.html(factory_html, height=1120, scrolling=False)
 
 
 else:
