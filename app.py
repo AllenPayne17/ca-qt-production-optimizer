@@ -524,6 +524,7 @@ class SimEngine {
   constructor(config) {
     this.stations = config.stations.map((s, i) => new Station(s, i));
     this.requiredRate = config.requiredRate;
+    this.arrivalRate = config.systemCapacity || config.requiredRate;
     this.shiftMin = config.shiftMinutes;
     this.target = config.productionTarget;
     this.simTime = 0;
@@ -549,13 +550,17 @@ class SimEngine {
     this.simTime += dt;
     if (this.simTime >= this.shiftMin) { this.running = false; showToast('Shift complete!'); return; }
 
-    // Arrivals
-    this.arrivalAccum += this.requiredRate * dt;
-    while (this.arrivalAccum >= 1) {
-      this.arrivalAccum -= 1;
-      const item = { id: this.itemId++, si: 0, state: 'q' };
-      this.stations[0].queue.push(item);
-      this.items.push(item);
+    // Arrivals — feed at system capacity (bottleneck rate) so production
+    // finishes ahead of schedule, matching Step 5 business impact math.
+    // Stop feeding once target is reached (drain remaining items).
+    if (this.produced < this.target) {
+      this.arrivalAccum += this.arrivalRate * dt;
+      while (this.arrivalAccum >= 1) {
+        this.arrivalAccum -= 1;
+        const item = { id: this.itemId++, si: 0, state: 'q' };
+        this.stations[0].queue.push(item);
+        this.items.push(item);
+      }
     }
 
     // Process stations (with carry-over so fast machines aren't throttled)
@@ -1974,9 +1979,16 @@ if 'result' in st.session_state:
         "and you can experiment with changes on the fly."
     )
 
+    # System capacity = bottleneck station rate (matches Step 5 math)
+    system_cap = min(
+        (recipes_used[i]['output_qty'] / recipes_used[i]['time'])
+        * scalings_used[i] * sol[i]
+        for i in range(ns)
+    )
     sim_config = {
         "stations": [],
         "requiredRate": float(rr),
+        "systemCapacity": float(system_cap),
         "shiftMinutes": int(st.session_state.get('shift_hours', 12) * 60),
         "productionTarget": int(rr * st.session_state.get('shift_hours', 12) * 60),
     }
