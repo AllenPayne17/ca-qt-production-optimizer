@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+.claude/
+*.jpg
+*.png
+*.pdf
+*.pptx
+*.docx
+*.ipynb
+new image 5/
