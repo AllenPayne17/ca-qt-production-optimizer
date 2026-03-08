@@ -665,7 +665,7 @@ class Renderer {
     const dpr = window.devicePixelRatio || 1;
     const parent = this.c.parentElement;
     const w = parent.clientWidth - 16;
-    const h = 560;
+    const h = 340;
     this.c.style.width = w + 'px';
     this.c.style.height = h + 'px';
     this.c.width = w * dpr;
@@ -678,8 +678,8 @@ class Renderer {
     const n = this.e.stations.length;
     const mx = 50, totalW = this.W - 2 * mx;
     const gap = totalW / n;
-    const sw = Math.min(gap * 0.6, 110), sh = 140;
-    const sy = this.H * 0.42;
+    const sw = Math.min(gap * 0.6, 110), sh = 120;
+    const sy = 110;
     this.pos = [];
     for (let i = 0; i < n; i++) {
       const cx = mx + gap * i + gap / 2;
@@ -1996,7 +1996,7 @@ if 'result' in st.session_state:
 
     sim_json = json.dumps(sim_config)
     factory_html = FACTORY_SIM_HTML.replace("__SIM_CONFIG__", sim_json)
-    st.components.v1.html(factory_html, height=1150, scrolling=False)
+    st.components.v1.html(factory_html, height=930, scrolling=False)
 
 
 else:
