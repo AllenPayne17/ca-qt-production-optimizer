@@ -1,5 +1,5 @@
 """
-Production Line Optimizer
+OptiFlow — Production Line Optimizer
 Smart machine allocation for manufacturing efficiency
 """
 
@@ -18,13 +18,14 @@ from core_algorithm import (
     run_monte_carlo,
     run_stress_test,
 )
+from templates import INDUSTRY_TEMPLATES
 
 # ============================================================================
 # PAGE CONFIG
 # ============================================================================
 
 st.set_page_config(
-    page_title="Production Line Optimizer",
+    page_title="OptiFlow — Production Line Optimizer",
     page_icon="🏭",
     layout="wide",
 )
@@ -171,7 +172,7 @@ div[data-testid="stTooltipIcon"] {
 }
 
 /* ─── Hero badge pills ─── */
-.algo-badge {
+.feature-badge {
     display: inline-block;
     background: rgba(0, 212, 170, 0.12);
     color: #00d4aa;
@@ -189,7 +190,7 @@ div[data-testid="stTooltipIcon"] {
     margin-top: 4px;
     margin-bottom: 12px;
 }
-.algo-badges-row {
+.feature-badges-row {
     text-align: center;
     margin-bottom: 8px;
 }
@@ -214,6 +215,16 @@ div[data-testid="stTooltipIcon"] {
     margin-bottom: 16px;
     color: #bbb;
     font-size: 14px;
+}
+
+/* ─── Template selector buttons ─── */
+div[data-testid="stHorizontalBlock"] button[kind="secondary"] {
+    border: 1px solid #333 !important;
+    font-size: 13px !important;
+}
+div[data-testid="stHorizontalBlock"] button[kind="primary"] {
+    border: 2px solid #00d4aa !important;
+    box-shadow: 0 0 12px rgba(0, 212, 170, 0.2) !important;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -387,7 +398,7 @@ FACTORY_SIM_HTML = """
       <table id="stationTable">
         <thead><tr>
           <th>Station</th><th>Machines</th><th>Queue (Lq)</th>
-          <th>Sim. Utilization (ρ)</th><th>QT Utilization (ρ)</th><th>Rate (u/min)</th>
+          <th>Live Utilization</th><th>Modeled Utilization</th><th>Rate (u/min)</th>
           <th>Processed</th><th>Status</th>
         </tr></thead>
         <tbody id="stationBody"></tbody>
@@ -1019,7 +1030,7 @@ function updateDashboard() {
     dashCard('Current Rate', e.rate.toFixed(1) + ' u/min', 'Target: ' + e.requiredRate.toFixed(1) + ' u/min') +
     dashCard('Total Queue (Lq)', totalQueue.toString(), totalQueue > 20 ? 'Queues building up' : 'Queues healthy') +
     dashCard('Machines', activeMachines + ' / ' + totalMachines, (totalMachines - activeMachines) > 0 ? (totalMachines - activeMachines) + ' broken' : 'All operational') +
-    dashCard('Avg Util (Sim)', (avgUtil * 100).toFixed(1) + '%', 'QT ref: ' + (avgQT * 100).toFixed(1) + '%') +
+    dashCard('Avg Utilization', (avgUtil * 100).toFixed(1) + '%', 'Modeled: ' + (avgQT * 100).toFixed(1) + '%') +
     dashCard('Bottleneck', bn.name, (bn.utilization * 100).toFixed(0) + '% util') +
     dashCard('Shift Progress', shiftPct.toFixed(1) + '%', renderer.fmtTime(e.simTime) + ' / ' + shiftStr) +
     dashCard('Items In System', e.items.length.toString(), 'Moving through pipeline');
@@ -1198,8 +1209,8 @@ def solution_metrics(sol, rr, recipes, scalings=None):
 # ============================================================================
 
 with st.sidebar:
-    st.markdown("### 🏭 Production Line Optimizer")
-    st.caption("Optimal machine allocation using evolutionary computation")
+    st.markdown("### 🏭 OptiFlow")
+    st.caption("Smart production line optimization")
     st.divider()
 
     if 'result' in st.session_state:
@@ -1215,22 +1226,22 @@ with st.sidebar:
                       f"{st.session_state['mc']['success_rate']:.0f}%")
         st.divider()
 
-    st.markdown("**🔬 Algorithms Used**")
+    st.markdown("**What OptiFlow Does**")
     st.markdown(
-        "- **Cultural Algorithm (CA)** — Evolutionary optimization with belief space guidance\n"
-        "- **Queuing Theory (M/M/c)** — Erlang C-based queue analysis\n"
-        "- **Monte Carlo** — Stochastic reliability validation"
+        "- **Smart Optimization** — Finds the best machine setup for your line\n"
+        "- **Performance Modeling** — Analyzes queues, wait times & throughput\n"
+        "- **Reliability Testing** — Stress-tests your setup with real-world variability"
     )
     st.divider()
 
-    st.markdown("**📋 Workflow**")
+    st.markdown("**📋 Your Workflow**")
     st.markdown(
-        "1. Enter your production details\n"
-        "2. Run the **Cultural Algorithm**\n"
+        "1. Configure your production line\n"
+        "2. Run the optimizer\n"
         "3. Review recommended setup\n"
-        "4. Validate with **Monte Carlo**\n"
+        "4. Test reliability & risk\n"
         "5. Analyze business impact\n"
-        "6. Watch the factory simulation"
+        "6. Watch the live simulation"
     )
 
 
@@ -1239,48 +1250,48 @@ with st.sidebar:
 # ============================================================================
 
 st.markdown(
-    "<h1 style='text-align:center; margin-bottom:0;'>🏭 Production Line Optimizer</h1>"
+    "<h1 style='text-align:center; margin-bottom:0;'>🏭 OptiFlow</h1>"
     "<p class='hero-subtitle'>"
-    "Find the optimal machine allocation for your production line</p>"
-    "<div class='algo-badges-row'>"
-    "<span class='algo-badge'>Cultural Algorithm (CA)</span>"
-    "<span class='algo-badge'>Queuing Theory (M/M/c)</span>"
-    "<span class='algo-badge'>Monte Carlo Simulation</span>"
+    "Optimize your production line in minutes</p>"
+    "<div class='feature-badges-row'>"
+    "<span class='feature-badge'>Smart Optimization</span>"
+    "<span class='feature-badge'>Performance Modeling</span>"
+    "<span class='feature-badge'>Reliability Testing</span>"
+    "<span class='feature-badge'>Live Simulation</span>"
     "</div>",
     unsafe_allow_html=True,
 )
 
 
 # ============================================================================
-# ALGORITHMS OVERVIEW
+# HOW OPTIFLOW WORKS
 # ============================================================================
 
-with st.expander("How Our Algorithms Work", expanded=False):
+with st.expander("How OptiFlow Works", expanded=False):
     algo_c1, algo_c2, algo_c3 = st.columns(3)
     with algo_c1:
-        st.markdown("#### Cultural Algorithm")
+        st.markdown("#### Smart Optimization")
         st.markdown(
-            "An evolutionary optimization technique inspired by cultural evolution. "
-            "It uses a **Belief Space** to store knowledge from past generations and a "
-            "**Population Space** that evolves candidate solutions. The belief space "
-            "guides crossover and mutation operators to efficiently search for the "
-            "optimal machine allocation."
+            "OptiFlow tests **thousands of possible machine configurations** to find "
+            "the one that best balances cost, speed, and efficiency. It learns from "
+            "each test to focus on the most promising setups, converging on the "
+            "optimal allocation for your line."
         )
     with algo_c2:
-        st.markdown("#### Queuing Theory (M/M/c)")
+        st.markdown("#### Performance Modeling")
         st.markdown(
-            "Models each production stage as an **M/M/c queue** — multiple parallel "
-            "servers with Poisson arrivals and exponential service times. Calculates "
-            "realistic metrics like **average queue length (Lq)**, **waiting time (Wq)**, "
-            "and **utilization** using the **Erlang C formula** to evaluate each configuration."
+            "Each production stage is modeled as a real queue system. OptiFlow "
+            "calculates realistic metrics like **average queue length**, "
+            "**waiting time**, and **station utilization** to evaluate how well "
+            "each configuration actually performs under load."
         )
     with algo_c3:
-        st.markdown("#### Monte Carlo Simulation")
+        st.markdown("#### Reliability Testing")
         st.markdown(
-            "Validates results by simulating **thousands of production days** with "
-            "random machine breakdowns (5% failure rate) and speed variations (±10%). "
-            "Provides a **reliability score** showing how often the optimized setup "
-            "meets your production target under real-world conditions."
+            "Once the best setup is found, OptiFlow stress-tests it by simulating "
+            "**thousands of production days** with random machine breakdowns and "
+            "speed variations. This gives you a **reliability score** showing how "
+            "often the setup meets your target under real-world conditions."
         )
 
 
@@ -1289,14 +1300,50 @@ with st.expander("How Our Algorithms Work", expanded=False):
 # ============================================================================
 
 st.markdown("---")
-st.markdown("## Step 1: Tell Us About Your Production Line")
+st.markdown("## Step 1: Configure Your Production Line")
+
+# ── Industry Template Selector ──
+st.markdown("##### Choose an Industry Template")
 st.markdown(
     '<div class="input-hint">'
-    '📝 We\'ve pre-loaded a sample cookie production line. '
-    '<strong>Edit the fields below</strong> to match your factory — '
-    'change stage names, output quantities, cycle times, and machines. '
-    'Click any field to start editing.'
+    'Pick a template to pre-fill your production line, or start from scratch. '
+    'You can customize everything after selecting.'
     '</div>',
+    unsafe_allow_html=True,
+)
+
+template_keys = list(INDUSTRY_TEMPLATES.keys())
+# Two rows of 3 for better readability
+row1_keys = template_keys[:3]
+row2_keys = template_keys[3:]
+for row_keys in [row1_keys, row2_keys]:
+    tcols = st.columns(len(row_keys))
+    for i, key in enumerate(row_keys):
+        tmpl_info = INDUSTRY_TEMPLATES[key]
+        with tcols[i]:
+            is_selected = st.session_state.get('selected_template', 'food_manufacturing') == key
+            if st.button(
+                f"{tmpl_info['icon']} {tmpl_info['label']}",
+                key=f"tmpl_{key}",
+                use_container_width=True,
+                type="primary" if is_selected else "secondary",
+            ):
+                st.session_state['selected_template'] = key
+                # Clear data editor state so it reloads with new template
+                for k in list(st.session_state.keys()):
+                    if 'station_editor' in k:
+                        del st.session_state[k]
+                st.rerun()
+
+active_template_key = st.session_state.get('selected_template', 'food_manufacturing')
+active_template = INDUSTRY_TEMPLATES[active_template_key]
+
+st.markdown(
+    f'<div class="input-hint">'
+    f'Using <strong>{active_template["icon"]} {active_template["label"]}</strong> template — '
+    f'{active_template["description"]}. '
+    f'<strong>Edit the fields below</strong> to match your factory.'
+    f'</div>',
     unsafe_allow_html=True,
 )
 
@@ -1305,14 +1352,14 @@ with c1:
     st.markdown("##### 📦 Production Target")
     production_target = st.number_input(
         "Units needed per shift",
-        value=26577, min_value=100, step=500,
+        value=active_template['default_target'], min_value=100, step=500,
     )
-    st.caption("Your total production target for one shift (e.g., 26,577 units)")
+    st.caption("Your total production target for one shift")
 with c2:
     st.markdown("##### ⏱️ Shift Duration")
     shift_hours = st.number_input(
         "Hours per shift",
-        value=12, min_value=1, max_value=24,
+        value=active_template['default_shift_hours'], min_value=1, max_value=24,
     )
     st.caption("How many hours is one production shift? (1–24 hours)")
 with c3:
@@ -1336,13 +1383,12 @@ tc3.caption("**Cycle Time** — Minutes for one cycle to complete")
 tc4.caption("**Machines You Have** — Current machine count at this stage")
 
 default_data = []
-for idx in range(6):
-    r = cookie_recipes[idx]
+for stage in active_template['stages']:
     default_data.append({
-        "Stage Name": station_names[idx],
-        "Output Per Cycle": r["output_qty"],
-        "Cycle Time (min)": r["time"],
-        "Machines You Have": 1,
+        "Stage Name": stage["name"],
+        "Output Per Cycle": stage["output_per_cycle"],
+        "Cycle Time (min)": stage["cycle_time"],
+        "Machines You Have": stage.get("machines", 1),
     })
 
 station_df = pd.DataFrame(default_data)
@@ -1386,9 +1432,9 @@ for idx in range(n_stages):
         "queue_type": "FIFO",
     }
     current_machines.append(int(row["Machines You Have"]))
-    # Use known scaling factor if it matches original station, else 1
-    if idx < len(scaling_factors):
-        user_scalings.append(scaling_factors[idx])
+    # Use scaling factor from template, else 1
+    if idx < len(active_template['stages']):
+        user_scalings.append(active_template['stages'][idx].get('scaling', 1))
     else:
         user_scalings.append(1)
 
@@ -1405,41 +1451,41 @@ st.plotly_chart(
 # ============================================================================
 
 st.markdown("---")
-st.markdown("## Step 2: Optimize Your Production Line")
+st.markdown("## Step 2: Optimize")
 st.markdown(
-    "The **Cultural Algorithm** will evolve thousands of machine configurations, "
-    "using **Queuing Theory** to evaluate queue lengths and wait times at each stage. "
-    "It finds the setup that hits your target with minimal waiting and maximum efficiency."
+    "OptiFlow will test thousands of machine configurations and evaluate "
+    "queue performance at each stage. It finds the setup that hits your "
+    "target with minimal waiting and maximum efficiency."
 )
 
-with st.expander("⚙️ Algorithm Parameters (optional)", expanded=False):
+with st.expander("⚙️ Optimizer Settings (optional)", expanded=False):
     st.markdown(
         '<div class="input-hint">'
-        '🔧 Adjust the Cultural Algorithm parameters. '
+        '🔧 Adjust the optimizer settings. '
         'Default values work well for most cases.'
         '</div>',
         unsafe_allow_html=True,
     )
     a1, a2, a3 = st.columns(3)
     with a1:
-        pop_size = st.slider("Population Size", 20, 200, 50, step=10)
-        st.caption("Candidate solutions per generation in the Cultural Algorithm")
+        pop_size = st.slider("Configurations to Test", 20, 200, 50, step=10)
+        st.caption("How many setups to evaluate each round")
     with a2:
-        max_gen = st.slider("Generations", 100, 2000, 1000, step=100)
-        st.caption("Evolutionary generations — more may find better solutions")
+        max_gen = st.slider("Optimization Rounds", 100, 2000, 1000, step=100)
+        st.caption("More rounds may find better solutions")
     with a3:
         seed = st.number_input("Random Seed", value=1, min_value=0)
         st.caption("Same seed = same results (for reproducibility)")
 
 optimize_btn = st.button(
-    "🚀 Run Cultural Algorithm — Find the Best Setup",
+    "🚀 Run Optimizer — Find the Best Setup",
     type="primary",
     use_container_width=True,
 )
 
 if optimize_btn:
     # Live visualization placeholders
-    progress_bar = st.progress(0, text="Initializing Cultural Algorithm...")
+    progress_bar = st.progress(0, text="Initializing optimizer...")
     live_metrics_ph = st.empty()
     chart_placeholder = st.empty()
     belief_chart_ph = st.empty()
@@ -1461,7 +1507,7 @@ if optimize_btn:
             pct = gen / msg['max_gen']
             progress_bar.progress(
                 min(pct, 1.0),
-                text=f"Evolving solutions... Generation {gen}/{msg['max_gen']}"
+                text=f"Optimizing... Round {gen}/{msg['max_gen']}"
             )
             fitness_history.append(msg['best_fitness'])
             mean_history.append(msg['pop_fitness_mean'])
@@ -1472,17 +1518,17 @@ if optimize_btn:
                 # ── Live metric cards ──
                 with live_metrics_ph.container():
                     lm1, lm2, lm3, lm4 = st.columns(4)
-                    lm1.metric("Generation", f"{gen}/{msg['max_gen']}")
-                    lm2.metric("Best Fitness", f"{msg['best_fitness']:.2f}")
-                    lm3.metric("Population Diversity", f"±{msg['pop_fitness_std']:.2f}")
-                    lm4.metric("Stagnation", f"{msg['stagnation']}/50",
+                    lm1.metric("Round", f"{gen}/{msg['max_gen']}")
+                    lm2.metric("Best Score", f"{msg['best_fitness']:.2f}")
+                    lm3.metric("Search Diversity", f"±{msg['pop_fitness_std']:.2f}")
+                    lm4.metric("No-Improvement Streak", f"{msg['stagnation']}/50",
                                delta="converging" if msg['stagnation'] > 30 else "exploring",
                                delta_color="inverse" if msg['stagnation'] > 30 else "normal")
 
                 # ── Convergence + Population spread chart ──
                 fig_live = make_subplots(
                     rows=1, cols=2,
-                    subplot_titles=("Fitness Convergence", "Population Spread"),
+                    subplot_titles=("Optimization Progress", "Configuration Explorer"),
                     horizontal_spacing=0.1,
                 )
                 # Best fitness line
@@ -1490,13 +1536,13 @@ if optimize_btn:
                     x=gen_history, y=fitness_history,
                     mode='lines', line=dict(color=TEAL, width=2),
                     fill='tozeroy', fillcolor='rgba(0,212,170,0.1)',
-                    name='Best Fitness',
+                    name='Best Score',
                 ), row=1, col=1)
-                # Mean fitness line
+                # Mean score line
                 fig_live.add_trace(go.Scatter(
                     x=gen_history, y=mean_history,
                     mode='lines', line=dict(color=AMBER, width=1, dash='dot'),
-                    name='Mean Fitness',
+                    name='Average Score',
                 ), row=1, col=1)
 
                 # Per-station population spread (box-like: mean ± std)
@@ -1511,18 +1557,18 @@ if optimize_btn:
                     error_y=dict(type='data', array=station_stds, visible=True,
                                  color='rgba(0,212,170,0.5)'),
                     marker_color=TEAL, opacity=0.7,
-                    name='Pop. Mean ± Std',
+                    name='Avg. Machines ± Range',
                 ), row=1, col=2)
                 # Belief space bounds as scatter markers
                 fig_live.add_trace(go.Scatter(
                     x=snames_short, y=belief_lower,
                     mode='markers', marker=dict(color=GREEN, size=10, symbol='triangle-up'),
-                    name='Belief Lower',
+                    name='Search Min',
                 ), row=1, col=2)
                 fig_live.add_trace(go.Scatter(
                     x=snames_short, y=belief_upper,
                     mode='markers', marker=dict(color=RED, size=10, symbol='triangle-down'),
-                    name='Belief Upper',
+                    name='Search Max',
                 ), row=1, col=2)
 
                 fig_live.update_layout(
@@ -1539,38 +1585,40 @@ if optimize_btn:
                     key=f"live_chart_{gen}",
                 )
 
-                # ── Belief Space bounds evolution ──
-                fig_belief = go.Figure()
-                for i, sn in enumerate(user_stage_names):
-                    short = sn[:8]
-                    fig_belief.add_trace(go.Bar(
-                        x=[short], y=[belief_upper[i] - belief_lower[i]],
-                        base=[belief_lower[i]],
-                        marker_color=TEAL, opacity=0.4,
-                        showlegend=(i == 0),
-                        name='Belief Range',
-                    ))
-                    fig_belief.add_trace(go.Scatter(
-                        x=[short], y=[msg['best_solution'][i]],
-                        mode='markers',
-                        marker=dict(color='white', size=12, symbol='diamond',
-                                    line=dict(color=TEAL, width=2)),
-                        showlegend=(i == 0),
-                        name='Current Best',
-                    ))
-                fig_belief.update_layout(
-                    title="Belief Space — Normative Knowledge (bounds the algorithm explores)",
-                    yaxis_title="Machine Count",
-                    height=250,
-                    margin=dict(l=40, r=20, t=40, b=40),
-                    barmode='overlay',
-                    legend=dict(orientation='h', yanchor='bottom', y=-0.3, x=0.5, xanchor='center'),
-                )
-                belief_chart_ph.plotly_chart(
-                    fig_belief, use_container_width=True,
-                    config={'displayModeBar': False},
-                    key=f"belief_chart_{gen}",
-                )
+                # ── Search range visualization (advanced view) ──
+                with belief_chart_ph.container():
+                    with st.expander("Advanced View", expanded=False):
+                        fig_belief = go.Figure()
+                        for i, sn in enumerate(user_stage_names):
+                            short = sn[:8]
+                            fig_belief.add_trace(go.Bar(
+                                x=[short], y=[belief_upper[i] - belief_lower[i]],
+                                base=[belief_lower[i]],
+                                marker_color=TEAL, opacity=0.4,
+                                showlegend=(i == 0),
+                                name='Search Range',
+                            ))
+                            fig_belief.add_trace(go.Scatter(
+                                x=[short], y=[msg['best_solution'][i]],
+                                mode='markers',
+                                marker=dict(color='white', size=12, symbol='diamond',
+                                            line=dict(color=TEAL, width=2)),
+                                showlegend=(i == 0),
+                                name='Current Best',
+                            ))
+                        fig_belief.update_layout(
+                            title="Search Range — How the optimizer narrows its focus",
+                            yaxis_title="Machine Count",
+                            height=250,
+                            margin=dict(l=40, r=20, t=40, b=40),
+                            barmode='overlay',
+                            legend=dict(orientation='h', yanchor='bottom', y=-0.3, x=0.5, xanchor='center'),
+                        )
+                        st.plotly_chart(
+                            fig_belief, use_container_width=True,
+                            config={'displayModeBar': False},
+                            key=f"belief_chart_{gen}",
+                        )
 
                 # ── Current best solution table ──
                 with best_sol_ph.container():
@@ -1608,7 +1656,7 @@ if optimize_btn:
         st.session_state['metrics'] = m
 
         st.success(
-            f"Cultural Algorithm converged in **{result_data['elapsed']:.1f} seconds** — "
+            f"Optimization complete in **{result_data['elapsed']:.1f} seconds** — "
             f"Optimal allocation: **{best['machines']} machines** across {len(edited_recipes)} stages."
         )
 
@@ -1633,9 +1681,9 @@ if 'result' in st.session_state:
     # ==================================================================
 
     st.markdown("---")
-    st.markdown("## Step 3: Your Recommended Setup")
-    st.markdown("The Cultural Algorithm found the optimal machine allocation. "
-                "Queuing metrics below are calculated using the **Erlang C formula**.")
+    st.markdown("## Step 3: Recommended Setup")
+    st.markdown("Here is the optimal machine allocation for your production line. "
+                "Performance metrics below show queue behavior and utilization at each stage.")
 
     # Hero metrics — plain language
     h1, h2, h3, h4 = st.columns(4)
@@ -1695,13 +1743,13 @@ if 'result' in st.session_state:
     # ==================================================================
 
     st.markdown("---")
-    st.markdown("## Step 4: Will It Actually Work?")
+    st.markdown("## Step 4: Reliability & Risk Analysis")
     st.markdown("Real factories deal with machine breakdowns, speed variations, and demand changes. "
                 "Let's test if this setup can handle the real world.")
 
     # --- 4A: Reliability ---
-    st.markdown("### Monte Carlo Reliability Test")
-    st.markdown("Using **Monte Carlo simulation**, we run thousands of production days with random "
+    st.markdown("### Reliability Test")
+    st.markdown("We simulate thousands of production days with random "
                 "machine breakdowns (5% failure rate) and speed variations (±10%) to see how "
                 "often this setup meets your target.")
 
@@ -1710,11 +1758,12 @@ if 'result' in st.session_state:
         n_sims = st.slider("Number of simulated days", 1000, 10000, 10000,
                           step=1000, key="mc_sims")
         st.caption("More days = more reliable results but takes longer")
-        mc_btn = st.button("🎲 Run Monte Carlo Simulation")
+        mc_btn = st.button("🎲 Run Reliability Test")
 
     if mc_btn:
         with st.spinner(f"Simulating {n_sims:,} production days..."):
-            mc = run_monte_carlo(sol, n_simulations=n_sims, required_rate=rr)
+            mc = run_monte_carlo(sol, n_simulations=n_sims, required_rate=rr,
+                                recipes=recipes_used, scalings=scalings_used, names=snames)
         st.session_state['mc'] = mc
 
     if 'mc' in st.session_state:
@@ -1770,7 +1819,7 @@ if 'result' in st.session_state:
     st.markdown("### Can You Handle More Orders?")
     st.markdown("What happens if demand goes up 10% or 20%? Will your line keep up?")
 
-    stress = run_stress_test(sol, rr, recipes_used, scalings_used)
+    stress = run_stress_test(sol, rr, recipes_used, scalings_used, names=snames)
 
     cols = st.columns(5)
     for i, s in enumerate(stress):
@@ -1821,7 +1870,7 @@ if 'result' in st.session_state:
     # ==================================================================
 
     st.markdown("---")
-    st.markdown("## Step 5: What This Means for Your Business")
+    st.markdown("## Step 5: Business Impact")
 
     shift_h = st.session_state.get('shift_hours', 12)
     target_units = rr * shift_h * 60
@@ -1952,4 +2001,4 @@ if 'result' in st.session_state:
 
 else:
     st.markdown("---")
-    st.info("👆 Enter your production details above, then click **Run Cultural Algorithm** to get started.")
+    st.info("👆 Configure your production line above, then click **Run Optimizer** to get started.")

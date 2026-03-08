@@ -524,25 +524,29 @@ SIMULATION_HOURS = 12
 TOTAL_MINUTES = SIMULATION_HOURS * 60
 
 
-class CookieProductionSimulator:
-    """Discrete-event simulator for cookie production line"""
+class ProductionSimulator:
+    """Discrete-event simulator for production line"""
 
-    def __init__(self, solution, recipes=None):
+    def __init__(self, solution, recipes=None, scalings=None, names=None):
         self.solution = solution
         self.recipes = recipes or cookie_recipes
+        self.scalings = scalings or scaling_factors
+        self.names = names or station_names
         self.stations = []
         self.setup_stations()
 
     def setup_stations(self):
-        for i in range(6):
+        n_stations = len(self.solution)
+        for i in range(n_stations):
             recipe = self.recipes[i]
-            scaling = scaling_factors[i]
+            scaling = self.scalings[i] if i < len(self.scalings) else 1
+            name = self.names[i] if i < len(self.names) else f"Stage {i+1}"
             capacity_per_machine = (recipe["output_qty"] / recipe["time"]) * scaling
             self.stations.append({
-                'name': station_names[i],
+                'name': name,
                 'machines': self.solution[i],
                 'capacity_per_machine': capacity_per_machine,
-                'type': recipe['machine_type'],
+                'type': recipe.get('machine_type', f'machine_{i}'),
                 'processing_time': recipe['time'],
                 'batch_size': recipe["output_qty"] * scaling,
             })
@@ -583,33 +587,39 @@ class CookieProductionSimulator:
         return total_cookies, bottleneck_idx, utilizations
 
 
-def run_monte_carlo(solution, n_simulations=1000, required_rate=None):
+def run_monte_carlo(solution, n_simulations=1000, required_rate=None,
+                    recipes=None, scalings=None, names=None):
     """Run Monte Carlo simulation and return summary data."""
+    recipes = recipes or cookie_recipes
+    scalings = scalings or scaling_factors
+    names = names or station_names
+
     if required_rate is None:
         required_rate = 26577 / (12 * 60)
 
     target = required_rate * TOTAL_MINUTES
-    sim = CookieProductionSimulator(solution)
+    sim = ProductionSimulator(solution, recipes=recipes, scalings=scalings, names=names)
 
     productions = []
     bottleneck_counts = defaultdict(int)
 
     for _ in range(n_simulations):
         total, bn_idx, _ = sim.simulate_shift()
+        bn_name = names[bn_idx] if bn_idx < len(names) else f"Stage {bn_idx+1}"
         productions.append(total)
-        bottleneck_counts[station_names[bn_idx]] += 1
+        bottleneck_counts[bn_name] += 1
 
     productions = np.array(productions)
     success_rate = np.mean(productions >= target) * 100
 
     # Compute system capacity and time to reach target
-    sim_base = CookieProductionSimulator(solution)
+    sim_base = ProductionSimulator(solution, recipes=recipes, scalings=scalings, names=names)
     system_capacity = min(s['capacity_per_machine'] * s['machines']
                          for s in sim_base.stations)
     hours_to_target = (target / system_capacity) / 60 if system_capacity > 0 else 12
     queue_wait = sum(
         m['Wq'] for m in calculate_station_queue_metrics(
-            solution, cookie_recipes, scaling_factors, required_rate)
+            solution, recipes, scalings, required_rate)
     )
 
     return {
@@ -630,10 +640,11 @@ def run_monte_carlo(solution, n_simulations=1000, required_rate=None):
     }
 
 
-def run_stress_test(solution, base_required_rate, recipes=None, scalings=None):
+def run_stress_test(solution, base_required_rate, recipes=None, scalings=None, names=None):
     """Sensitivity analysis: test solution under -20% to +20% demand variation."""
     recipes = recipes or cookie_recipes
     scalings = scalings or scaling_factors
+    names = names or station_names
 
     scenarios = [
         ("-20%", 0.80),
@@ -655,7 +666,7 @@ def run_stress_test(solution, base_required_rate, recipes=None, scalings=None):
             'scenario': label,
             'demand_factor': factor,
             'required_rate': test_rate,
-            'bottleneck_station': station_names[bottleneck_idx],
+            'bottleneck_station': names[bottleneck_idx] if bottleneck_idx < len(names) else f"Stage {bottleneck_idx+1}",
             'bottleneck_util': bottleneck_util,
             'total_Lq': sum(m['Lq'] for m in metrics),
             'max_Wq': max(m['Wq'] for m in metrics),
