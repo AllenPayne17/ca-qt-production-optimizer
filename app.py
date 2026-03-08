@@ -1985,10 +1985,13 @@ if 'result' in st.session_state:
         * scalings_used[i] * sol[i]
         for i in range(ns)
     )
+    # Feed at 95% of system capacity so bottleneck stays under 100%
+    # This still finishes well before the shift ends, matching Step 5
+    sim_arrival = system_cap * 0.95
     sim_config = {
         "stations": [],
         "requiredRate": float(rr),
-        "systemCapacity": float(system_cap),
+        "systemCapacity": float(sim_arrival),
         "shiftMinutes": int(st.session_state.get('shift_hours', 12) * 60),
         "productionTarget": int(rr * st.session_state.get('shift_hours', 12) * 60),
     }
