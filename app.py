@@ -1528,11 +1528,10 @@ st.markdown(
     '</div>',
     unsafe_allow_html=True,
 )
-tc1, tc2, tc3, tc4 = st.columns(4)
+tc1, tc2, tc3 = st.columns(3)
 tc1.caption("**Stage Name** — Name of each production stage (e.g., Mixer, Oven)")
 tc2.caption("**Output Per Cycle** — Units produced per machine cycle")
 tc3.caption("**Cycle Time** — Minutes for one cycle to complete")
-tc4.caption("**Machines** — Current machine count at this stage")
 
 default_data = []
 for stage in active_template['stages']:
@@ -1540,7 +1539,6 @@ for stage in active_template['stages']:
         "Stage Name": stage["name"],
         "Output Per Cycle": stage["output_per_cycle"],
         "Cycle Time (min)": stage["cycle_time"],
-        "Machines": stage.get("machines", 1),
     })
 
 station_df = pd.DataFrame(default_data)
@@ -1560,16 +1558,12 @@ edited_df = st.data_editor(
         "Cycle Time (min)": st.column_config.NumberColumn(
             "Cycle Time (min)", min_value=1,
             help="How long one cycle takes in minutes"),
-        "Machines": st.column_config.NumberColumn(
-            "Machines", min_value=1, max_value=20,
-            help="How many machines you currently have at this stage"),
     },
 )
 
 # Build recipes from user input
 n_stages = len(edited_df)
 edited_recipes = {}
-current_machines = []
 user_stage_names = []
 user_scalings = []
 
@@ -1583,7 +1577,6 @@ for idx in range(n_stages):
         "machine_type": name.lower(),
         "queue_type": "FIFO",
     }
-    current_machines.append(int(row["Machines"]))
     # Use scaling factor from template, else 1
     if idx < len(active_template['stages']):
         user_scalings.append(active_template['stages'][idx].get('scaling', 1))
@@ -1592,7 +1585,7 @@ for idx in range(n_stages):
 
 st.markdown("**Your Current Production Flow**")
 st.plotly_chart(
-    render_factory_flow(user_stage_names, current_machines),
+    render_factory_flow(user_stage_names, [1] * n_stages),
     use_container_width=True,
     config={'displayModeBar': False},
 )
