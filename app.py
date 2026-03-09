@@ -1532,7 +1532,7 @@ tc1, tc2, tc3, tc4 = st.columns(4)
 tc1.caption("**Stage Name** — Name of each production stage (e.g., Mixer, Oven)")
 tc2.caption("**Output Per Cycle** — Units produced per machine cycle")
 tc3.caption("**Cycle Time** — Minutes for one cycle to complete")
-tc4.caption("**Machines You Have** — Current machine count at this stage")
+tc4.caption("**Machines** — Current machine count at this stage")
 
 default_data = []
 for stage in active_template['stages']:
@@ -1540,7 +1540,7 @@ for stage in active_template['stages']:
         "Stage Name": stage["name"],
         "Output Per Cycle": stage["output_per_cycle"],
         "Cycle Time (min)": stage["cycle_time"],
-        "Machines You Have": stage.get("machines", 1),
+        "Machines": stage.get("machines", 1),
     })
 
 station_df = pd.DataFrame(default_data)
@@ -1560,8 +1560,8 @@ edited_df = st.data_editor(
         "Cycle Time (min)": st.column_config.NumberColumn(
             "Cycle Time (min)", min_value=1,
             help="How long one cycle takes in minutes"),
-        "Machines You Have": st.column_config.NumberColumn(
-            "Machines You Have", min_value=1, max_value=20,
+        "Machines": st.column_config.NumberColumn(
+            "Machines", min_value=1, max_value=20,
             help="How many machines you currently have at this stage"),
     },
 )
@@ -1583,7 +1583,7 @@ for idx in range(n_stages):
         "machine_type": name.lower(),
         "queue_type": "FIFO",
     }
-    current_machines.append(int(row["Machines You Have"]))
+    current_machines.append(int(row["Machines"]))
     # Use scaling factor from template, else 1
     if idx < len(active_template['stages']):
         user_scalings.append(active_template['stages'][idx].get('scaling', 1))
