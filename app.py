@@ -1499,7 +1499,7 @@ c1, c2, c3 = st.columns([0.35, 0.3, 0.35])
 with c1:
     st.markdown("##### 📦 Production Target")
     production_target = st.number_input(
-        "Units needed per shift",
+        "Products needed per shift",
         value=active_template['default_target'], min_value=100, step=500,
     )
     st.caption("Your total production target for one shift")
@@ -1526,7 +1526,7 @@ st.markdown(
 )
 tc1, tc2, tc3, tc4 = st.columns(4)
 tc1.caption("**Stage Name** — Name of each production stage (e.g., Mixer, Oven)")
-tc2.caption("**Output Per Cycle** — Units produced per machine cycle")
+tc2.caption("**Output Per Cycle** — Products produced per machine cycle")
 tc3.caption("**Cycle Time** — Minutes for one cycle to complete")
 tc4.caption("**Current Machines** — Machines you currently own at this stage")
 
@@ -1552,7 +1552,7 @@ edited_df = st.data_editor(
             help="Name of this production stage (e.g., Mixer, Oven, Packager)"),
         "Output Per Cycle": st.column_config.NumberColumn(
             "Output Per Cycle", min_value=1,
-            help="How many units this machine produces per cycle"),
+            help="How many products this machine produces per cycle"),
         "Cycle Time (min)": st.column_config.NumberColumn(
             "Cycle Time (min)", min_value=1,
             help="How long one cycle takes in minutes"),
@@ -1842,7 +1842,7 @@ if 'result' in st.session_state:
     h1.metric("Machines You Have", sum(current_mach))
     h2.metric("Machines Recommended", sum(sol),
               delta=f"+{additional_total} to buy" if additional_total > 0 else "No change needed")
-    h3.metric("Production Speed", f"{m['throughput']:.1f} units/min",
+    h3.metric("Production Speed", f"{m['throughput']:.1f} products/min",
               delta=f"{'Meets' if m['throughput'] >= rr else 'Below'} your target")
     h4.metric("Busiest Stage", snames[m['bn_idx']])
     headroom = (1 - m['bn_util']) * 100
@@ -1939,9 +1939,9 @@ if 'result' in st.session_state:
                   f"{mc['success_rate']:.0f}%",
                   delta=f"out of {mc['n_simulations']:,} simulated days")
         r2.metric("Average Daily Output",
-                  f"{mc['mean']:,.0f} units")
+                  f"{mc['mean']:,.0f} products")
         r3.metric("Worst Day Output",
-                  f"{mc['min']:,.0f} units",
+                  f"{mc['min']:,.0f} products",
                   delta="still above target" if mc['min'] >= mc['target'] else "below target",
                   delta_color="normal" if mc['min'] >= mc['target'] else "inverse")
 
@@ -1955,7 +1955,7 @@ if 'result' in st.session_state:
                            annotation_text=f"Your Target: {mc['target']:,.0f}")
         fig_hist.update_layout(
             title="How Much You Produce Each Day (simulated)",
-            xaxis_title="Units Produced", yaxis_title="Number of Days",
+            xaxis_title="Products Produced", yaxis_title="Number of Days",
             height=380, showlegend=False,
         )
         st.plotly_chart(fig_hist, use_container_width=True, config={'displayModeBar': False})
