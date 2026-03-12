@@ -7,10 +7,10 @@ INDUSTRY_TEMPLATES = {
         "description": "Cookie, bakery, and food production lines",
         "stages": [
             {"name": "Mixer",          "output_per_cycle": 1,   "cycle_time": 8,  "scaling": 360, "machines": 1},
-            {"name": "Dough Extruder", "output_per_cycle": 400, "cycle_time": 4,  "scaling": 1,   "machines": 1},
-            {"name": "Shelf",          "output_per_cycle": 600, "cycle_time": 10, "scaling": 1,   "machines": 1},
+            {"name": "Dough Extruder", "output_per_cycle": 400, "cycle_time": 4,  "scaling": 1,   "machines": 2},
+            {"name": "Shelf",          "output_per_cycle": 600, "cycle_time": 10, "scaling": 1,   "machines": 3},
             {"name": "Oven",           "output_per_cycle": 300, "cycle_time": 12, "scaling": 1,   "machines": 1},
-            {"name": "Cooling Rack",   "output_per_cycle": 600, "cycle_time": 20, "scaling": 1,   "machines": 1},
+            {"name": "Cooling Rack",   "output_per_cycle": 600, "cycle_time": 20, "scaling": 1,   "machines": 2},
             {"name": "Packager",       "output_per_cycle": 100, "cycle_time": 3,  "scaling": 1,   "machines": 1},
         ],
         "default_target": 26577,
