@@ -368,9 +368,9 @@ FACTORY_SIM_HTML = """
   <button class="sim-btn" id="resetBtn" onclick="resetSim()">Reset</button>
   <span class="speed-label">Speed:</span>
   <select class="sim-select" id="speedSel" onchange="setSpeed(this.value)">
-    <option value="1">1x</option>
+    <option value="1" selected>1x</option>
     <option value="2">2x</option>
-    <option value="5" selected>5x</option>
+    <option value="5">5x</option>
     <option value="10">10x</option>
   </select>
   <div style="flex:1"></div>
@@ -534,7 +534,7 @@ class SimEngine {
     this.simTime = 0;
     this.produced = 0;
     this.running = false;
-    this.speed = 5;
+    this.speed = 1;
     this.arrivalAccum = 0;
     this.itemId = 0;
     this.items = [];
@@ -925,7 +925,7 @@ class Renderer {
 const canvas = document.getElementById('simCanvas');
 const engine = new SimEngine(CONFIG);
 const renderer = new Renderer(canvas, engine);
-engine.speed = 5;
+engine.speed = 1;
 engine.running = true;
 
 // Clock display
