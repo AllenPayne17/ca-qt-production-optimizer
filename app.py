@@ -2256,21 +2256,20 @@ if 'result' in st.session_state:
     # ==================================================================
 
     st.markdown("---")
-    st.markdown("## Step 6: Watch Your Factory in Action")
+    st.markdown("## Step 6: Watch Your Current Factory in Action")
     st.markdown(
-        "See your optimized production line running in real time. "
+        "See your **current production line** running in real time. "
         "Items flow through each stage, queues build up at bottlenecks, "
-        "and you can experiment with changes on the fly."
+        "showing where your factory needs improvement."
     )
 
-    # System capacity = bottleneck station rate (matches Step 5 math)
+    # Simulate the CURRENT factory setup (what the company actually owns)
     system_cap = min(
         (recipes_used[i]['output_qty'] / recipes_used[i]['time'])
-        * scalings_used[i] * sol[i]
+        * scalings_used[i] * current_mach[i]
         for i in range(ns)
     )
     # Feed at 95% of system capacity so bottleneck stays under 100%
-    # This still finishes well before the shift ends, matching Step 5
     sim_arrival = system_cap * 0.95
     sim_config = {
         "stations": [],
@@ -2280,17 +2279,17 @@ if 'result' in st.session_state:
         "productionTarget": int(rr * st.session_state.get('shift_hours', 12) * 60),
     }
     for i in range(ns):
-        qm = m['qm'][i]
+        qm_cur = cur_metrics['qm'][i]
         recipe = recipes_used[i]
         sim_config["stations"].append({
             "name": snames[i],
-            "machineCount": int(sol[i]),
+            "machineCount": int(current_mach[i]),
             "outputQty": int(recipe['output_qty']),
             "cycleTime": float(recipe['time']),
             "scalingFactor": float(scalings_used[i]),
-            "utilization": float(qm['utilization']),
-            "serviceRate": float(qm['service_rate']),
-            "arrivalRate": float(qm['arrival_rate']),
+            "utilization": float(qm_cur['utilization']),
+            "serviceRate": float(qm_cur['service_rate']),
+            "arrivalRate": float(qm_cur['arrival_rate']),
         })
 
     sim_json = json.dumps(sim_config)
