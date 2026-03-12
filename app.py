@@ -2040,92 +2040,206 @@ if 'result' in st.session_state:
 
     shift_h = st.session_state.get('shift_hours', 12)
     target_units = rr * shift_h * 60
-    system_cap = min(
+
+    # ── Recommended setup metrics ──
+    rec_cap = min(
         (recipes_used[i]['output_qty'] / recipes_used[i]['time'])
         * scalings_used[i] * sol[i]
         for i in range(ns)
     )
-    hours_to_target = (target_units / system_cap) / 60 if system_cap > 0 else shift_h
-    buffer_hours = shift_h - hours_to_target
-    total_capacity = system_cap * shift_h * 60
+    rec_hours = (target_units / rec_cap) / 60 if rec_cap > 0 else shift_h
+    rec_buffer = shift_h - rec_hours
+    rec_total = rec_cap * shift_h * 60
 
+    # ── Current setup metrics ──
+    cur_metrics = solution_metrics(current_mach, rr, recipes_used, scalings_used)
+    cur_cap = min(
+        (recipes_used[i]['output_qty'] / recipes_used[i]['time'])
+        * scalings_used[i] * current_mach[i]
+        for i in range(ns)
+    )
+    cur_hours = (target_units / cur_cap) / 60 if cur_cap > 0 else shift_h * 2
+    cur_total = cur_cap * shift_h * 60
     additional_buy = sum(sol) - sum(current_mach)
-    e1, e2, e3, e4 = st.columns(4)
-    e1.metric(
-        "You'll Finish In",
-        f"{hours_to_target:.1f} hours",
-        delta=f"{buffer_hours:.1f} hours to spare",
-    )
-    e2.metric(
-        "Maximum Daily Output",
-        f"{total_capacity:,.0f} units",
-        delta=f"+{(total_capacity / target_units - 1) * 100:.0f}% above your target",
-    )
-    e3.metric("Equipment You Have", f"{sum(current_mach)} machines")
-    e4.metric(
-        "Additional to Buy",
-        f"{additional_buy} machine{'s' if additional_buy != 1 else ''}",
-        delta="No purchase needed" if additional_buy == 0 else f"+{additional_buy} new",
-    )
 
-    # Timeline
+    # ── Side-by-side comparison ──
+    st.markdown("### Current Setup vs Recommended Setup")
+    col_cur, col_arrow, col_rec = st.columns([5, 1, 5])
+
+    with col_cur:
+        st.markdown("**Your Current Setup**")
+        st.metric("Total Machines", f"{sum(current_mach)}")
+        can_finish = cur_hours <= shift_h
+        st.metric(
+            "Time to Finish",
+            f"{cur_hours:.1f} hours" if can_finish else f"{cur_hours:.1f} hrs (over shift!)",
+            delta="Within shift" if can_finish else "Exceeds shift",
+            delta_color="normal" if can_finish else "inverse",
+        )
+        st.metric("Max Daily Output", f"{cur_total:,.0f} products")
+
+    with col_arrow:
+        st.markdown("<div style='text-align:center; padding-top:60px; font-size:28px; color:#00d4aa;'>&#10132;</div>", unsafe_allow_html=True)
+
+    with col_rec:
+        st.markdown("**Recommended Setup**")
+        st.metric("Total Machines", f"{sum(sol)}", delta=f"+{additional_buy}" if additional_buy > 0 else "No change")
+        st.metric(
+            "Time to Finish",
+            f"{rec_hours:.1f} hours",
+            delta=f"{rec_buffer:.1f} hrs buffer",
+        )
+        st.metric(
+            "Max Daily Output",
+            f"{rec_total:,.0f} products",
+            delta=f"+{rec_total - cur_total:,.0f} more" if rec_total > cur_total else "Same",
+        )
+
+    # ── Key improvement summary ──
+    time_saved = cur_hours - rec_hours
+    output_gain = rec_total - cur_total
+    imp1, imp2, imp3 = st.columns(3)
+    imp1.metric("Machines to Buy", f"+{additional_buy}", delta="Investment needed" if additional_buy > 0 else "None")
+    imp2.metric("Time Saved", f"{time_saved:.1f} hours", delta="Faster production")
+    imp3.metric("Output Increase", f"+{output_gain:,.0f} products", delta=f"+{output_gain / cur_total * 100:.0f}% more capacity" if cur_total > 0 else "")
+
+    # ── Per-station comparison table ──
+    st.markdown("---")
+    st.markdown("### Station-by-Station Comparison")
+    comparison_data = []
+    for i in range(ns):
+        cur_u = cur_metrics['qm'][i]['utilization']
+        rec_u = m['qm'][i]['utilization']
+        improvement = cur_u - rec_u
+        comparison_data.append({
+            "Stage": snames[i],
+            "Current Machines": current_mach[i],
+            "Recommended": sol[i],
+            "To Buy": sol[i] - current_mach[i],
+            "Current Util (%)": round(cur_u * 100, 1),
+            "Recommended Util (%)": round(rec_u * 100, 1),
+            "Improvement": f"-{improvement * 100:.0f}%" if improvement > 0 else "Same",
+        })
+    comp_df = pd.DataFrame(comparison_data)
+    st.dataframe(comp_df, use_container_width=True, hide_index=True)
+
+    # ── Recommendations ──
+    st.markdown("---")
+    st.markdown("### Recommendations")
+    recs = []
+    for i in range(ns):
+        add = sol[i] - current_mach[i]
+        if add <= 0:
+            continue
+        cur_u = cur_metrics['qm'][i]['utilization']
+        rec_u = m['qm'][i]['utilization']
+        priority = "HIGH" if cur_u >= 0.85 else "MEDIUM" if cur_u >= 0.70 else "LOW"
+        reason = "Bottleneck — severely overloaded" if cur_u >= 1.0 else \
+                 "Critical — near or at capacity" if cur_u >= 0.85 else \
+                 "Heavy load — queue buildup risk" if cur_u >= 0.70 else \
+                 "Optimization — improve throughput balance"
+        recs.append((priority, cur_u, i, add, rec_u, reason))
+
+    # Sort by priority: HIGH first, then by current utilization descending
+    priority_order = {"HIGH": 0, "MEDIUM": 1, "LOW": 2}
+    recs.sort(key=lambda r: (priority_order[r[0]], -r[1]))
+
+    if recs:
+        for priority, cur_u, i, add, rec_u, reason in recs:
+            color = "#e74c3c" if priority == "HIGH" else "#f39c12" if priority == "MEDIUM" else "#2ecc71"
+            st.markdown(
+                f'<div style="border-left:4px solid {color}; padding:8px 12px; margin-bottom:8px; '
+                f'background:rgba(255,255,255,0.03); border-radius:0 6px 6px 0;">'
+                f'<span style="color:{color}; font-weight:700;">[{priority}]</span> '
+                f'Add <b>{add}</b> machine{"s" if add > 1 else ""} to <b>{snames[i]}</b> — '
+                f'reduces utilization from <b>{cur_u*100:.0f}%</b> to <b>{rec_u*100:.0f}%</b><br>'
+                f'<span style="color:#888; font-size:0.85em;">{reason}</span>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+    else:
+        st.success("Your current setup already matches the recommended configuration. No changes needed.")
+
+    # ── Timeline ──
+    st.markdown("---")
     fig_tl = go.Figure()
     fig_tl.add_trace(go.Bar(
-        y=['Your Line'], x=[hours_to_target], orientation='h',
-        marker_color=TEAL, text=[f"Production: {hours_to_target:.1f} hrs"],
-        textposition='inside', textfont=dict(size=14, color='white'),
+        y=['Recommended'], x=[rec_hours], orientation='h',
+        marker_color=TEAL, text=[f"Production: {rec_hours:.1f} hrs"],
+        textposition='inside', textfont=dict(size=13, color='white'),
     ))
     fig_tl.add_trace(go.Bar(
-        y=['Your Line'], x=[buffer_hours], orientation='h',
+        y=['Recommended'], x=[rec_buffer], orientation='h',
         marker_color='rgba(0,212,170,0.25)',
-        text=[f"Buffer: {buffer_hours:.1f} hrs"],
-        textposition='inside', textfont=dict(size=14, color='white'),
+        text=[f"Buffer: {rec_buffer:.1f} hrs"],
+        textposition='inside', textfont=dict(size=13, color='white'),
     ))
+    cur_prod_hrs = min(cur_hours, shift_h)
+    cur_over = max(0, cur_hours - shift_h)
+    fig_tl.add_trace(go.Bar(
+        y=['Current'], x=[cur_prod_hrs], orientation='h',
+        marker_color=AMBER, text=[f"Production: {cur_hours:.1f} hrs"],
+        textposition='inside', textfont=dict(size=13, color='white'),
+    ))
+    if cur_over > 0:
+        fig_tl.add_trace(go.Bar(
+            y=['Current'], x=[cur_over], orientation='h',
+            marker_color='rgba(231,76,60,0.5)',
+            text=[f"Over by {cur_over:.1f} hrs"],
+            textposition='inside', textfont=dict(size=13, color='white'),
+        ))
     fig_tl.update_layout(
         barmode='stack',
-        title=f"Your {shift_h}-Hour Shift",
-        xaxis_title="Hours", xaxis_range=[0, shift_h + 0.5],
-        height=160, showlegend=False,
+        title=f"Shift Timeline Comparison ({shift_h}-Hour Shift)",
+        xaxis_title="Hours", xaxis_range=[0, max(shift_h, cur_hours) + 0.5],
+        height=200, showlegend=False,
         margin=dict(l=20, r=20, t=40, b=40),
     )
     fig_tl.add_vline(x=shift_h, line_dash="dash", line_color="white",
                      annotation_text="Shift Ends")
     st.plotly_chart(fig_tl, use_container_width=True, config={'displayModeBar': False})
 
-    # Cumulative curve
+    # ── Cumulative production curve (both setups) ──
     hours = np.linspace(0, shift_h, 200)
-    cumulative = system_cap * hours * 60
+    cum_rec = rec_cap * hours * 60
+    cum_cur = cur_cap * hours * 60
 
     fig_cum = go.Figure()
     fig_cum.add_trace(go.Scatter(
-        x=hours, y=cumulative, mode='lines',
+        x=hours, y=cum_cur, mode='lines', name='Current Setup',
+        line=dict(color=AMBER, width=2, dash='dash'),
+    ))
+    fig_cum.add_trace(go.Scatter(
+        x=hours, y=cum_rec, mode='lines', name='Recommended Setup',
         line=dict(color=TEAL, width=3),
         fill='tozeroy', fillcolor='rgba(0,212,170,0.1)',
     ))
-    fig_cum.add_hline(y=target_units, line_dash="dash", line_color=AMBER,
-                      annotation_text=f"Target: {target_units:,.0f} units")
+    fig_cum.add_hline(y=target_units, line_dash="dash", line_color="#e74c3c",
+                      annotation_text=f"Target: {target_units:,.0f} products")
     fig_cum.update_layout(
-        title="Production Throughout the Day",
-        xaxis_title="Hours Into Shift", yaxis_title="Total Units Produced",
-        height=380,
+        title="Cumulative Production: Current vs Recommended",
+        xaxis_title="Hours Into Shift", yaxis_title="Total Products Produced",
+        height=380, legend=dict(orientation='h', y=-0.15),
     )
     st.plotly_chart(fig_cum, use_container_width=True, config={'displayModeBar': False})
 
-    # Download
+    # ── Download ──
     st.markdown("---")
     st.markdown("### Export Your Recommended Setup")
     report = []
     for i in range(ns):
-        qm = m['qm'][i]
+        qm_rec = m['qm'][i]
+        qm_cur = cur_metrics['qm'][i]
         additional = sol[i] - current_mach[i]
         report.append({
             "Stage": snames[i],
             "Current Machines": current_mach[i],
             "Recommended Machines": sol[i],
             "Additional Needed": additional,
-            "How Busy (%)": round(qm['utilization'] * 100, 1),
-            "Status": load_label(qm['utilization']),
-            "Output Speed (units/min)": round(qm['output_rate'], 2),
+            "Current Utilization (%)": round(qm_cur['utilization'] * 100, 1),
+            "Recommended Utilization (%)": round(qm_rec['utilization'] * 100, 1),
+            "Status": load_label(qm_rec['utilization']),
+            "Output Speed (products/min)": round(qm_rec['output_rate'], 2),
         })
     csv = pd.DataFrame(report).to_csv(index=False)
     st.download_button(
