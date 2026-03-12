@@ -1368,8 +1368,13 @@ with st.sidebar:
     if 'result' in st.session_state:
         sol_s = st.session_state['result']['results'][0]['solution']
         ms = st.session_state.get('metrics')
+        cm_s = st.session_state.get('current_machines', [1] * len(sol_s))
+        additional_s = sum(sol_s) - sum(cm_s)
         st.markdown("**📊 Results Summary**")
-        st.metric("Total Machines Needed", sum(sol_s))
+        st.metric("Machines You Have", sum(cm_s))
+        st.metric("Machines Recommended", sum(sol_s))
+        if additional_s > 0:
+            st.metric("Machines to Buy", f"+{additional_s}")
         if ms:
             st.metric("Busiest Station",
                       f"{st.session_state.get('stage_names', station_names)[ms['bn_idx']]} ({ms['bn_util']*100:.0f}%)")
@@ -1528,10 +1533,11 @@ st.markdown(
     '</div>',
     unsafe_allow_html=True,
 )
-tc1, tc2, tc3 = st.columns(3)
+tc1, tc2, tc3, tc4 = st.columns(4)
 tc1.caption("**Stage Name** — Name of each production stage (e.g., Mixer, Oven)")
 tc2.caption("**Output Per Cycle** — Units produced per machine cycle")
 tc3.caption("**Cycle Time** — Minutes for one cycle to complete")
+tc4.caption("**Current Machines** — Machines you currently own at this stage")
 
 default_data = []
 for stage in active_template['stages']:
@@ -1539,6 +1545,7 @@ for stage in active_template['stages']:
         "Stage Name": stage["name"],
         "Output Per Cycle": stage["output_per_cycle"],
         "Cycle Time (min)": stage["cycle_time"],
+        "Current Machines": stage.get("machines", 1),
     })
 
 station_df = pd.DataFrame(default_data)
@@ -1558,12 +1565,16 @@ edited_df = st.data_editor(
         "Cycle Time (min)": st.column_config.NumberColumn(
             "Cycle Time (min)", min_value=1,
             help="How long one cycle takes in minutes"),
+        "Current Machines": st.column_config.NumberColumn(
+            "Current Machines", min_value=1, max_value=20,
+            help="How many machines you currently have at this stage (optimizer will not go below this)"),
     },
 )
 
 # Build recipes from user input
 n_stages = len(edited_df)
 edited_recipes = {}
+current_machines = []
 user_stage_names = []
 user_scalings = []
 
@@ -1577,6 +1588,8 @@ for idx in range(n_stages):
         "machine_type": name.lower(),
         "queue_type": "FIFO",
     }
+    cm_val = row["Current Machines"] if pd.notna(row.get("Current Machines")) else 1
+    current_machines.append(int(cm_val))
     # Use scaling factor from template, else 1
     if idx < len(active_template['stages']):
         user_scalings.append(active_template['stages'][idx].get('scaling', 1))
@@ -1585,7 +1598,7 @@ for idx in range(n_stages):
 
 st.markdown("**Your Current Production Flow**")
 st.plotly_chart(
-    render_factory_flow(user_stage_names, [1] * n_stages),
+    render_factory_flow(user_stage_names, current_machines),
     use_container_width=True,
     config={'displayModeBar': False},
 )
@@ -1645,7 +1658,7 @@ if optimize_btn:
     for msg in cultural_algorithm(
         edited_recipes, user_scalings, required_rate,
         pop_size=pop_size, max_gen=max_gen, seed=seed,
-        use_queuing=True,
+        use_queuing=True, min_machines=current_machines,
     ):
         if msg['type'] == 'progress':
             gen = msg['generation']
@@ -1796,6 +1809,7 @@ if optimize_btn:
         st.session_state['stage_names'] = user_stage_names
         st.session_state['scalings'] = user_scalings
         st.session_state['n_stages'] = n_stages
+        st.session_state['current_machines'] = current_machines
 
         m = solution_metrics(best['solution'], required_rate, edited_recipes, user_scalings)
         st.session_state['metrics'] = m
@@ -1820,6 +1834,7 @@ if 'result' in st.session_state:
     snames = st.session_state.get('stage_names', station_names)
     scalings_used = st.session_state.get('scalings', scaling_factors)
     ns = st.session_state.get('n_stages', 6)
+    current_mach = st.session_state.get('current_machines', [1] * ns)
 
     # ==================================================================
     # SECTION 3: YOUR RECOMMENDED SETUP
@@ -1831,13 +1846,16 @@ if 'result' in st.session_state:
                 "Performance metrics below show queue behavior and utilization at each stage.")
 
     # Hero metrics — plain language
-    h1, h2, h3, h4 = st.columns(4)
-    h1.metric("Total Machines Needed", sum(sol))
-    h2.metric("Production Speed", f"{m['throughput']:.1f} units/min",
+    additional_total = sum(sol) - sum(current_mach)
+    h1, h2, h3, h4, h5 = st.columns(5)
+    h1.metric("Machines You Have", sum(current_mach))
+    h2.metric("Machines Recommended", sum(sol),
+              delta=f"+{additional_total} to buy" if additional_total > 0 else "No change needed")
+    h3.metric("Production Speed", f"{m['throughput']:.1f} units/min",
               delta=f"{'Meets' if m['throughput'] >= rr else 'Below'} your target")
-    h3.metric("Busiest Stage", snames[m['bn_idx']])
+    h4.metric("Busiest Stage", snames[m['bn_idx']])
     headroom = (1 - m['bn_util']) * 100
-    h4.metric("Spare Capacity", f"{headroom:.0f}%",
+    h5.metric("Spare Capacity", f"{headroom:.0f}%",
               delta="Room to grow" if headroom > 15 else "Very tight")
 
     # Flow diagram with load colors
@@ -1856,9 +1874,12 @@ if 'result' in st.session_state:
     for i in range(ns):
         qm = m['qm'][i]
         u = qm['utilization']
+        additional = sol[i] - current_mach[i]
         detail_data.append({
             "Stage": snames[i],
-            "Machines": sol[i],
+            "Current": current_mach[i],
+            "Recommended": sol[i],
+            "To Buy": f"+{additional}" if additional > 0 else "—",
             "How Busy": f"{u*100:.0f}%",
             "Status": load_label(u),
             "Avg. Wait": f"{qm['Wq']*60:.1f} sec" if qm['Wq'] < 1 else f"{qm['Wq']:.1f} min",
@@ -1868,17 +1889,25 @@ if 'result' in st.session_state:
         use_container_width=True, hide_index=True,
     )
 
-    # Machine allocation chart
+    # Machine allocation chart — current vs recommended
     colors = [load_color(m['utils'][i]) for i in range(ns)]
-    fig_alloc = go.Figure(go.Bar(
+    fig_alloc = go.Figure()
+    fig_alloc.add_trace(go.Bar(
+        x=snames, y=current_mach,
+        marker_color='rgba(255,255,255,0.3)',
+        text=[f"{c}" for c in current_mach], textposition='outside',
+        name='Current',
+    ))
+    fig_alloc.add_trace(go.Bar(
         x=snames, y=sol,
         marker_color=colors,
-        text=[f"{s} machines" for s in sol], textposition='outside',
+        text=[f"{s}" for s in sol], textposition='outside',
+        name='Recommended',
     ))
     fig_alloc.update_layout(
-        title="Machines Per Stage",
+        title="Machines Per Stage: Current vs Recommended",
         yaxis_title="Number of Machines",
-        height=360, showlegend=False,
+        height=360, barmode='group',
     )
     st.plotly_chart(fig_alloc, use_container_width=True, config={'displayModeBar': False})
 
@@ -2028,7 +2057,8 @@ if 'result' in st.session_state:
     buffer_hours = shift_h - hours_to_target
     total_capacity = system_cap * shift_h * 60
 
-    e1, e2, e3 = st.columns(3)
+    additional_buy = sum(sol) - sum(current_mach)
+    e1, e2, e3, e4 = st.columns(4)
     e1.metric(
         "You'll Finish In",
         f"{hours_to_target:.1f} hours",
@@ -2039,7 +2069,12 @@ if 'result' in st.session_state:
         f"{total_capacity:,.0f} units",
         delta=f"+{(total_capacity / target_units - 1) * 100:.0f}% above your target",
     )
-    e3.metric("Equipment Needed", f"{sum(sol)} machines")
+    e3.metric("Equipment You Have", f"{sum(current_mach)} machines")
+    e4.metric(
+        "Additional to Buy",
+        f"{additional_buy} machine{'s' if additional_buy != 1 else ''}",
+        delta="No purchase needed" if additional_buy == 0 else f"+{additional_buy} new",
+    )
 
     # Timeline
     fig_tl = go.Figure()
@@ -2090,9 +2125,12 @@ if 'result' in st.session_state:
     report = []
     for i in range(ns):
         qm = m['qm'][i]
+        additional = sol[i] - current_mach[i]
         report.append({
             "Stage": snames[i],
+            "Current Machines": current_mach[i],
             "Recommended Machines": sol[i],
+            "Additional Needed": additional,
             "How Busy (%)": round(qm['utilization'] * 100, 1),
             "Status": load_label(qm['utilization']),
             "Output Speed (units/min)": round(qm['output_rate'], 2),

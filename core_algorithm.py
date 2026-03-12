@@ -98,11 +98,12 @@ def calculate_station_queue_metrics(solution, recipes, scalings, required_rate):
 class BeliefSpace:
     """Cultural Algorithm Belief Space"""
 
-    def __init__(self, n_stations):
+    def __init__(self, n_stations, min_machines=None):
         self.n_stations = n_stations
+        self.min_machines = min_machines or [1] * n_stations
         self.normative = {
-            'lower': [1] * n_stations,
-            'upper': [10] * n_stations,
+            'lower': list(self.min_machines),
+            'upper': [max(10, mm) for mm in self.min_machines],
             'score': [0.0] * n_stations,
         }
         self.situational = []
@@ -130,7 +131,7 @@ class BeliefSpace:
             current_lower = self.normative['lower'][i]
             avg_lower = np.percentile(values, 25)
             if avg_lower < current_lower:
-                self.normative['lower'][i] = max(1, int(avg_lower))
+                self.normative['lower'][i] = max(self.min_machines[i], int(avg_lower))
                 self.normative['score'][i] += 1
             current_upper = self.normative['upper'][i]
             avg_upper = np.percentile(values, 75)
@@ -304,16 +305,22 @@ def evaluate_base_ca(individual, required_rate, recipes, scalings):
 # GENETIC OPERATORS
 # ============================================================================
 
-def create_cultural_population(pop_size, n_stations, belief_space):
+def create_cultural_population(pop_size, n_stations, belief_space, min_machines=None):
+    if min_machines is None:
+        min_machines = [1] * n_stations
     population = []
     for _ in range(pop_size):
-        ind = [random.randint(1, 10) for _ in range(n_stations)]
+        ind = [random.randint(min_machines[i], max(10, min_machines[i])) for i in range(n_stations)]
         population.append(creator.Individual(ind))
     return population
 
 
 def cultural_crossover(ind1, ind2, belief_space):
     tools.cxTwoPoint(ind1, ind2)
+    # Enforce minimum machines constraint after crossover
+    for i in range(len(ind1)):
+        ind1[i] = max(belief_space.min_machines[i], ind1[i])
+        ind2[i] = max(belief_space.min_machines[i], ind2[i])
     if random.random() < 0.5:
         belief_space.influence(ind1)
     if random.random() < 0.5:
@@ -332,7 +339,7 @@ def cultural_mutation(individual, belief_space, mutation_rate=0.5):
             elif current > upper:
                 individual[i] = random.randint(max(lower, upper - 2), upper)
             else:
-                individual[i] = max(1, current + random.randint(-2, 2))
+                individual[i] = max(belief_space.min_machines[i], current + random.randint(-2, 2))
     return (individual,)
 
 
@@ -352,7 +359,7 @@ def _setup_deap():
 
 def cultural_algorithm(recipes, scalings, required_rate,
                        pop_size=50, max_gen=1000, seed=1,
-                       use_queuing=True):
+                       use_queuing=True, min_machines=None):
     """
     Run Cultural Algorithm. Returns a generator that yields progress dicts
     each generation, then yields the final result dict.
@@ -364,11 +371,13 @@ def cultural_algorithm(recipes, scalings, required_rate,
     np.random.seed(seed)
 
     n_stations = len(recipes)
+    if min_machines is None:
+        min_machines = [1] * n_stations
     _setup_deap()
 
     eval_fn = evaluate_with_queuing if use_queuing else evaluate_base_ca
 
-    belief_space = BeliefSpace(n_stations)
+    belief_space = BeliefSpace(n_stations, min_machines=min_machines)
 
     toolbox = base.Toolbox()
     toolbox.register("attr_int", random.randint, 1, 10)
@@ -376,7 +385,7 @@ def cultural_algorithm(recipes, scalings, required_rate,
                      creator.Individual, toolbox.attr_int, n=n_stations)
     toolbox.register("population", create_cultural_population,
                      pop_size=pop_size, n_stations=n_stations,
-                     belief_space=belief_space)
+                     belief_space=belief_space, min_machines=min_machines)
     toolbox.register("evaluate", eval_fn,
                      required_rate=required_rate,
                      recipes=recipes, scalings=scalings)
