@@ -325,22 +325,34 @@ FACTORY_SIM_HTML = """
   .dash-card .value { font-size:16px; font-weight:700; color:#00d4aa; margin-top:2px; }
   .dash-card .sub { font-size:9px; color:#666; margin-top:1px; }
 
-  /* Station table */
-  #stationTable {
-    width:100%; border-collapse:collapse; font-size:11px;
-    background:#0e1117;
+  /* Station cards (directly below each machine on canvas) */
+  #stationCards {
+    position:relative; margin:0 8px 6px 8px; background:#0e1117;
+    min-height:10px;
   }
-  #stationTable th {
-    background:#1a1f2e; color:#888; font-weight:600; padding:6px 8px;
-    text-align:left; font-size:10px; text-transform:uppercase; letter-spacing:0.5px;
-    border-bottom:1px solid #333;
+  .station-card {
+    position:absolute; top:0;
+    background:#131720; border:1px solid #1a1f2e; border-radius:6px;
+    padding:6px 8px; font-size:10px; color:#ccc;
+    transition: border-color 0.3s;
+    box-sizing:border-box;
   }
-  #stationTable td {
-    padding:5px 8px; border-bottom:1px solid #1a1f2e; color:#ccc;
+  .station-card.bottleneck { border-color:#f39c12; }
+  .station-card .sc-name {
+    font-size:11px; font-weight:700; color:#fafafa; text-align:center;
+    margin-bottom:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
   }
-  #stationTable tr.bottleneck td { color:#f39c12; font-weight:600; }
+  .station-card.bottleneck .sc-name { color:#f39c12; }
+  .station-card .sc-row {
+    display:flex; justify-content:space-between; align-items:center;
+    padding:2px 0; border-bottom:1px solid #1a1f2e;
+  }
+  .station-card .sc-row:last-child { border-bottom:none; }
+  .station-card .sc-label { color:#888; font-size:9px; text-transform:uppercase; letter-spacing:0.3px; }
+  .station-card .sc-val { color:#ccc; font-weight:600; font-size:10px; text-align:right; }
+  .station-card .sc-status { text-align:center; padding:3px 0 1px; font-weight:600; font-size:10px; }
   .util-bar-bg {
-    width:60px; height:6px; background:#1a1f2e; border-radius:3px; display:inline-block; vertical-align:middle;
+    width:100%; height:5px; background:#1a1f2e; border-radius:3px; margin-top:2px;
   }
   .util-bar-fg { height:100%; border-radius:3px; transition: width 0.3s; }
   .status-dot { width:8px; height:8px; border-radius:50%; display:inline-block; margin-right:4px; }
@@ -382,6 +394,9 @@ FACTORY_SIM_HTML = """
 
 <canvas id="simCanvas"></canvas>
 
+<!-- Station Detail Cards — directly below each machine -->
+<div id="stationCards"></div>
+
 <!-- ══════ LIVE DASHBOARD ══════ -->
 <div id="dashboard">
 
@@ -397,21 +412,6 @@ FACTORY_SIM_HTML = """
     <div style="background:#0e1117; border-radius:0 0 8px 8px; padding:8px;">
       <canvas id="utilChart" style="width:100%; height:180px;"></canvas>
       <div id="utilLegend" style="display:flex; flex-wrap:wrap; gap:8px 16px; padding:6px 4px 2px; font-size:10px;"></div>
-    </div>
-  </div>
-
-  <!-- Station Details Table -->
-  <div class="dash-section">
-    <div class="dash-title">Station Details (Live)</div>
-    <div style="overflow-x:auto; background:#0e1117; border-radius:0 0 8px 8px;">
-      <table id="stationTable">
-        <thead><tr>
-          <th>Station</th><th>Machines</th><th>Queue (Lq)</th>
-          <th>Live Utilization</th><th>Modeled Utilization</th><th>Rate (u/min)</th>
-          <th>Processed</th><th>Status</th>
-        </tr></thead>
-        <tbody id="stationBody"></tbody>
-      </table>
     </div>
   </div>
 
@@ -679,7 +679,7 @@ class Renderer {
     const dpr = window.devicePixelRatio || 1;
     const parent = this.c.parentElement;
     const w = parent.clientWidth - 16;
-    const h = 340;
+    const h = 220;
     this.c.style.width = w + 'px';
     this.c.style.height = h + 'px';
     this.c.width = w * dpr;
@@ -693,7 +693,7 @@ class Renderer {
     const mx = 50, totalW = this.W - 2 * mx;
     const gap = totalW / n;
     const sw = Math.min(gap * 0.6, 110), sh = 120;
-    const sy = 110;
+    const sy = 90;
     this.pos = [];
     for (let i = 0; i < n; i++) {
       const cx = mx + gap * i + gap / 2;
@@ -722,7 +722,6 @@ class Renderer {
     const bn = this.e.bnIdx;
     this.e.stations.forEach((s, i) => this._drawStation(s, this.pos[i], i === bn));
     this._drawPlusMinus();
-    this._drawHUD();
     this._drawTooltip();
     this._drawToasts();
   }
@@ -994,7 +993,7 @@ window.addEventListener('resize', () => renderer.resize());
 
 // ── DASHBOARD UPDATE ──
 const sysMetricsEl = document.getElementById('sysMetrics');
-const stationBodyEl = document.getElementById('stationBody');
+const stationCardsEl = document.getElementById('stationCards');
 const eventLogEl = document.getElementById('eventLog');
 const eventEntries = [];
 let lastDashUpdate = 0;
@@ -1051,12 +1050,17 @@ function updateDashboard() {
     dashCard('Shift Progress', shiftPct.toFixed(1) + '%', renderer.fmtTime(e.simTime) + ' / ' + shiftStr) +
     dashCard('Items In System', e.items.length.toString(), 'Moving through pipeline');
 
-  // Station table
-  let rows = '';
+  // Station cards — absolutely positioned below each canvas machine
+  let cards = '';
   const bnIdx = e.bnIdx;
+  const n = e.stations.length;
+  const cW = renderer.W;                    // canvas CSS width
+  const mx = 50, totalW = cW - 2 * mx;
+  const slotW = totalW / n;
+  let maxCardH = 0;
   e.stations.forEach((st, i) => {
-    const u = st.utilization;       // time-averaged (should match QT)
-    const qt = st.qtUtilization;    // queuing theory reference from Step 3
+    const u = st.utilization;
+    const qt = st.qtUtilization;
     const col = utilColorCSS(u);
     const qtCol = utilColorCSS(qt);
     const statusLabel = st.broken ? '<span style="color:' + RED + '">BREAKDOWN</span>'
@@ -1065,18 +1069,26 @@ function updateDashboard() {
       : u >= 0.50 ? '<span style="color:' + GREEN + '">Normal</span>'
       : '<span style="color:#888">Light</span>';
     const isBn = i === bnIdx;
-    rows += '<tr class="' + (isBn ? 'bottleneck' : '') + '">' +
-      '<td>' + (isBn ? '⚠ ' : '') + st.name + '</td>' +
-      '<td>' + st.activeMachines + '/' + st.machineCount + '</td>' +
-      '<td>' + st.queue.length + '</td>' +
-      '<td><div class="util-bar-bg"><div class="util-bar-fg" style="width:' + Math.min(100, u*100) + '%;background:' + col + '"></div></div> ' + (u*100).toFixed(1) + '%</td>' +
-      '<td><div class="util-bar-bg"><div class="util-bar-fg" style="width:' + Math.min(100, qt*100) + '%;background:' + qtCol + '"></div></div> ' + (qt*100).toFixed(1) + '%</td>' +
-      '<td>' + st.effectiveRate.toFixed(1) + '</td>' +
-      '<td>' + st.totalProcessed.toLocaleString() + '</td>' +
-      '<td>' + statusLabel + '</td>' +
-      '</tr>';
+    const left = mx + slotW * i + 2;        // 2px inner gap
+    const w = slotW - 4;                     // 4px total gap between cards
+    cards += '<div class="station-card ' + (isBn ? 'bottleneck' : '') + '" style="left:' + left + 'px;width:' + w + 'px;">' +
+      '<div class="sc-name">' + (isBn ? '⚠ ' : '') + st.name + '</div>' +
+      '<div class="sc-row"><span class="sc-label">Machines</span><span class="sc-val">' + st.activeMachines + '/' + st.machineCount + '</span></div>' +
+      '<div class="sc-row"><span class="sc-label">Queue</span><span class="sc-val">' + st.queue.length + '</span></div>' +
+      '<div class="sc-row"><span class="sc-label">Live Util</span><span class="sc-val" style="color:' + col + '">' + (u*100).toFixed(1) + '%</span></div>' +
+      '<div class="util-bar-bg"><div class="util-bar-fg" style="width:' + Math.min(100, u*100) + '%;background:' + col + '"></div></div>' +
+      '<div class="sc-row"><span class="sc-label">Model Util</span><span class="sc-val" style="color:' + qtCol + '">' + (qt*100).toFixed(1) + '%</span></div>' +
+      '<div class="util-bar-bg"><div class="util-bar-fg" style="width:' + Math.min(100, qt*100) + '%;background:' + qtCol + '"></div></div>' +
+      '<div class="sc-row"><span class="sc-label">Rate</span><span class="sc-val">' + st.effectiveRate.toFixed(1) + ' u/m</span></div>' +
+      '<div class="sc-row"><span class="sc-label">Processed</span><span class="sc-val">' + st.totalProcessed.toLocaleString() + '</span></div>' +
+      '<div class="sc-status">' + statusLabel + '</div>' +
+      '</div>';
   });
-  stationBodyEl.innerHTML = rows;
+  stationCardsEl.innerHTML = cards;
+  // Set container height from tallest card
+  const cardEls = stationCardsEl.querySelectorAll('.station-card');
+  cardEls.forEach(c => { if (c.offsetHeight > maxCardH) maxCardH = c.offsetHeight; });
+  stationCardsEl.style.height = maxCardH + 'px';
 
   // Event log
   let logHtml = '';
@@ -2190,7 +2202,7 @@ if 'result' in st.session_state:
 
     sim_json = json.dumps(sim_config)
     factory_html = FACTORY_SIM_HTML.replace("__SIM_CONFIG__", sim_json)
-    st.components.v1.html(factory_html, height=1120, scrolling=False)
+    st.components.v1.html(factory_html, height=1200, scrolling=False)
 
 
 else:
