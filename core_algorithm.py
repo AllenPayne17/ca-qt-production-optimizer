@@ -53,7 +53,7 @@ def mmc_queue_metrics(arrival_rate, service_rate, servers):
     traffic_intensity = arrival_rate / service_rate
     utilization = traffic_intensity / servers
     if utilization >= 1:
-        return 1e+6, 1e+6, 1.0
+        return 1e+6, 1e+6, utilization
     P_queue = calculate_erlang_c(servers, traffic_intensity)
     Lq = P_queue * utilization / (1 - utilization)
     Wq = Lq / arrival_rate
@@ -61,27 +61,29 @@ def mmc_queue_metrics(arrival_rate, service_rate, servers):
 
 
 def calculate_station_queue_metrics(solution, recipes, scalings, required_rate):
-    """Calculate queuing metrics for all stations in the production line"""
+    """Calculate queuing metrics for all stations in the production line.
+
+    Each station is evaluated against the full required_rate so that ALL
+    bottlenecks are visible (not masked by upstream constraints).
+    System throughput = the minimum output_rate across all stations.
+    """
     metrics = []
-    arrival_rate = required_rate
 
     for idx, (count, recipe) in enumerate(zip(solution, recipes.values())):
         mu_per_machine = (recipe["output_qty"] / recipe["time"]) * scalings[idx]
         total_service_rate = mu_per_machine * count
 
         Lq, Wq, utilization = mmc_queue_metrics(
-            arrival_rate, total_service_rate / count, count
+            required_rate, total_service_rate / count, count
         )
 
-        output_rate = min(arrival_rate, total_service_rate * 0.95)
-        arrival_rate_for_metric = arrival_rate if idx == 0 else metrics[-1]['output_rate']
-        arrival_rate = output_rate
+        output_rate = min(required_rate, total_service_rate * 0.95)
 
         metrics.append({
             'station': idx,
             'machines': count,
             'service_rate': total_service_rate,
-            'arrival_rate': arrival_rate_for_metric,
+            'arrival_rate': required_rate,
             'Lq': Lq,
             'Wq': Wq,
             'utilization': utilization,
@@ -212,7 +214,7 @@ def evaluate_with_queuing(individual, required_rate, recipes, scalings):
 
     total_Lq = sum(m['Lq'] for m in queue_metrics)
     max_Wq = max(m['Wq'] for m in queue_metrics)
-    system_throughput = queue_metrics[-1]['output_rate']
+    system_throughput = min(m['output_rate'] for m in queue_metrics)
 
     utilizations = [m['utilization'] for m in queue_metrics]
     bottleneck_utilization = max(utilizations)
@@ -269,7 +271,7 @@ def evaluate_base_ca(individual, required_rate, recipes, scalings):
         individual, recipes, scalings, required_rate
     )
 
-    system_throughput = queue_metrics[-1]['output_rate']
+    system_throughput = min(m['output_rate'] for m in queue_metrics)
     utilizations = [m['utilization'] for m in queue_metrics]
     bottleneck_utilization = max(utilizations)
     bottleneck_idx = utilizations.index(bottleneck_utilization)

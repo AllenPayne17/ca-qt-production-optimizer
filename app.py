@@ -1346,7 +1346,7 @@ def solution_metrics(sol, rr, recipes, scalings=None):
     qm = calculate_station_queue_metrics(sol, recipes, sc, rr)
     total_Lq = sum(m['Lq'] for m in qm)
     max_Wq = max(m['Wq'] for m in qm)
-    throughput = qm[-1]['output_rate']
+    throughput = min(m['output_rate'] for m in qm)
     utils = [m['utilization'] for m in qm]
     bn_idx = utils.index(max(utils))
     return {
@@ -2034,7 +2034,8 @@ if 'result' in st.session_state:
     fig_stress.update_layout(
         title="How Busy Is Your Busiest Stage at Different Demand Levels?",
         xaxis_title="Demand Change", yaxis_title="Busiest Stage Load (%)",
-        yaxis_range=[0, 115], height=380, showlegend=False,
+        yaxis_range=[0, max(115, max(s['bottleneck_util'] * 100 for s in stress) + 15)],
+        height=380, showlegend=False,
     )
     st.plotly_chart(fig_stress, use_container_width=True, config={'displayModeBar': False})
 
