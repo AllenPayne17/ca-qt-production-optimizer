@@ -1649,7 +1649,7 @@ if optimize_btn:
     for msg in cultural_algorithm(
         edited_recipes, user_scalings, required_rate,
         pop_size=pop_size, max_gen=max_gen, seed=seed,
-        use_queuing=True, min_machines=current_machines,
+        use_queuing=True,
     ):
         if msg['type'] == 'progress':
             gen = msg['generation']
