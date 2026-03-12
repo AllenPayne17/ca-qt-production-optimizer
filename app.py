@@ -325,32 +325,24 @@ FACTORY_SIM_HTML = """
   .dash-card .value { font-size:16px; font-weight:700; color:#00d4aa; margin-top:2px; }
   .dash-card .sub { font-size:9px; color:#666; margin-top:1px; }
 
-  /* Station cards (directly below each machine on canvas) */
-  #stationCards {
-    position:relative; margin:0 8px 6px 8px; background:#0e1117;
-    min-height:10px;
-  }
-  .station-card {
-    position:absolute; top:0;
+  /* Per-station metrics cards */
+  .st-metric-card {
+    flex:1; min-width:0;
     background:#131720; border:1px solid #1a1f2e; border-radius:6px;
-    padding:6px 8px; font-size:10px; color:#ccc;
-    transition: border-color 0.3s;
-    box-sizing:border-box;
+    padding:8px 10px; text-align:center;
   }
-  .station-card.bottleneck { border-color:#f39c12; }
-  .station-card .sc-name {
-    font-size:11px; font-weight:700; color:#fafafa; text-align:center;
+  .st-metric-card.bottleneck { border-color:#f39c12; }
+  .st-metric-card .sm-name {
+    font-size:10px; font-weight:700; color:#fafafa;
     margin-bottom:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
   }
-  .station-card.bottleneck .sc-name { color:#f39c12; }
-  .station-card .sc-row {
-    display:flex; justify-content:space-between; align-items:center;
-    padding:2px 0; border-bottom:1px solid #1a1f2e;
+  .st-metric-card.bottleneck .sm-name { color:#f39c12; }
+  .st-metric-card .sm-row {
+    display:flex; justify-content:space-between; padding:2px 0;
+    font-size:9px;
   }
-  .station-card .sc-row:last-child { border-bottom:none; }
-  .station-card .sc-label { color:#888; font-size:9px; text-transform:uppercase; letter-spacing:0.3px; }
-  .station-card .sc-val { color:#ccc; font-weight:600; font-size:10px; text-align:right; }
-  .station-card .sc-status { text-align:center; padding:3px 0 1px; font-weight:600; font-size:10px; }
+  .st-metric-card .sm-label { color:#888; text-transform:uppercase; letter-spacing:0.3px; }
+  .st-metric-card .sm-val { font-weight:600; color:#ccc; }
   .util-bar-bg {
     width:100%; height:5px; background:#1a1f2e; border-radius:3px; margin-top:2px;
   }
@@ -394,16 +386,19 @@ FACTORY_SIM_HTML = """
 
 <canvas id="simCanvas"></canvas>
 
-<!-- Station Detail Cards — directly below each machine -->
-<div id="stationCards"></div>
-
 <!-- ══════ LIVE DASHBOARD ══════ -->
 <div id="dashboard">
 
-  <!-- System Metrics -->
+  <!-- System Metrics (3 key cards) -->
   <div class="dash-section">
     <div class="dash-title">System Overview</div>
     <div class="dash-grid" id="sysMetrics"></div>
+  </div>
+
+  <!-- Per-Station Individual Metrics -->
+  <div class="dash-section">
+    <div class="dash-title">Station Metrics (Individual)</div>
+    <div id="stationMetricsGrid" style="display:flex; gap:4px; padding:6px 8px; background:#0e1117; border-radius:0 0 8px 8px; overflow-x:auto;"></div>
   </div>
 
   <!-- Utilization History Chart -->
@@ -861,9 +856,9 @@ class Renderer {
     ctx.fillStyle = 'rgba(14,17,23,0.92)'; ctx.fillRect(0, hudY, this.W, hudH);
     ctx.fillStyle = TEAL; ctx.fillRect(0, hudY, this.W, 2);
     const metrics = [
-      { l: 'Units Produced', v: this.e.produced.toLocaleString() + ' / ' + this.e.target.toLocaleString() },
-      { l: 'Production Rate', v: this.e.rate.toFixed(1) + ' /min' },
-      { l: 'Target Rate', v: this.e.requiredRate.toFixed(1) + ' /min' },
+      { l: 'Products Produced', v: this.e.produced.toLocaleString() + ' / ' + this.e.target.toLocaleString() },
+      { l: 'Production Rate', v: this.e.rate.toFixed(1) + ' prod/min' },
+      { l: 'Target Rate', v: this.e.requiredRate.toFixed(1) + ' prod/min' },
       { l: 'Bottleneck', v: this.e.stations[this.e.bnIdx].name },
       { l: 'Progress', v: Math.min(100, (this.e.produced / this.e.target * 100)).toFixed(1) + '%' },
     ];
@@ -882,7 +877,7 @@ class Renderer {
     const lines = [
       st.name,
       'Machines: ' + st.activeMachines + '/' + st.machineCount,
-      'Rate: ' + st.effectiveRate.toFixed(1) + ' units/min',
+      'Rate: ' + st.effectiveRate.toFixed(1) + ' products/min',
       'Queue: ' + st.queue.length + ' items',
       'Processed: ' + st.totalProcessed.toLocaleString(),
       'Utilization: ' + Math.round(st.utilization * 100) + '%',
@@ -993,7 +988,7 @@ window.addEventListener('resize', () => renderer.resize());
 
 // ── DASHBOARD UPDATE ──
 const sysMetricsEl = document.getElementById('sysMetrics');
-const stationCardsEl = document.getElementById('stationCards');
+const stationMetricsEl = document.getElementById('stationMetricsGrid');
 const eventLogEl = document.getElementById('eventLog');
 const eventEntries = [];
 let lastDashUpdate = 0;
@@ -1039,56 +1034,40 @@ function updateDashboard() {
   const maxUtil = Math.max(...e.stations.map(st => st.utilization));
   const avgQT = e.stations.reduce((s, st) => s + st.qtUtilization, 0) / e.stations.length;
 
-  // System metrics cards
+  // System metrics — 3 key cards only
   sysMetricsEl.innerHTML =
     dashCard('Produced', e.produced.toLocaleString() + ' / ' + e.target.toLocaleString(), pct.toFixed(1) + '% of target') +
-    dashCard('Current Rate', e.rate.toFixed(1) + ' u/min', 'Target: ' + e.requiredRate.toFixed(1) + ' u/min') +
-    dashCard('Total Queue (Lq)', totalQueue.toString(), totalQueue > 20 ? 'Queues building up' : 'Queues healthy') +
-    dashCard('Machines', activeMachines + ' / ' + totalMachines, (totalMachines - activeMachines) > 0 ? (totalMachines - activeMachines) + ' broken' : 'All operational') +
-    dashCard('Avg Utilization', (avgUtil * 100).toFixed(1) + '%', 'Modeled: ' + (avgQT * 100).toFixed(1) + '%') +
-    dashCard('Bottleneck', bn.name, (bn.utilization * 100).toFixed(0) + '% util') +
     dashCard('Shift Progress', shiftPct.toFixed(1) + '%', renderer.fmtTime(e.simTime) + ' / ' + shiftStr) +
-    dashCard('Items In System', e.items.length.toString(), 'Moving through pipeline');
+    dashCard('Bottleneck', bn.name, (bn.utilization * 100).toFixed(0) + '% util');
 
-  // Station cards — absolutely positioned below each canvas machine
-  let cards = '';
+  // Per-station individual metrics grid
   const bnIdx = e.bnIdx;
-  const n = e.stations.length;
-  const cW = renderer.W;                    // canvas CSS width
-  const mx = 50, totalW = cW - 2 * mx;
-  const slotW = totalW / n;
-  let maxCardH = 0;
+  let smHtml = '';
   e.stations.forEach((st, i) => {
     const u = st.utilization;
-    const qt = st.qtUtilization;
     const col = utilColorCSS(u);
+    const isBn = i === bnIdx;
+    const qt = st.qtUtilization;
     const qtCol = utilColorCSS(qt);
     const statusLabel = st.broken ? '<span style="color:' + RED + '">BREAKDOWN</span>'
       : u >= 0.85 ? '<span style="color:' + RED + '">Overloaded</span>'
       : u >= 0.70 ? '<span style="color:' + AMBER + '">Heavy</span>'
       : u >= 0.50 ? '<span style="color:' + GREEN + '">Normal</span>'
       : '<span style="color:#888">Light</span>';
-    const isBn = i === bnIdx;
-    const left = mx + slotW * i + 2;        // 2px inner gap
-    const w = slotW - 4;                     // 4px total gap between cards
-    cards += '<div class="station-card ' + (isBn ? 'bottleneck' : '') + '" style="left:' + left + 'px;width:' + w + 'px;">' +
-      '<div class="sc-name">' + (isBn ? '⚠ ' : '') + st.name + '</div>' +
-      '<div class="sc-row"><span class="sc-label">Machines</span><span class="sc-val">' + st.activeMachines + '/' + st.machineCount + '</span></div>' +
-      '<div class="sc-row"><span class="sc-label">Queue</span><span class="sc-val">' + st.queue.length + '</span></div>' +
-      '<div class="sc-row"><span class="sc-label">Live Util</span><span class="sc-val" style="color:' + col + '">' + (u*100).toFixed(1) + '%</span></div>' +
+    smHtml += '<div class="st-metric-card ' + (isBn ? 'bottleneck' : '') + '">' +
+      '<div class="sm-name">' + (isBn ? '⚠ ' : '') + st.name + '</div>' +
+      '<div class="sm-row"><span class="sm-label">Machines</span><span class="sm-val">' + st.activeMachines + '/' + st.machineCount + '</span></div>' +
+      '<div class="sm-row"><span class="sm-label">Queue</span><span class="sm-val">' + st.queue.length + '</span></div>' +
+      '<div class="sm-row"><span class="sm-label">Live Util</span><span class="sm-val" style="color:' + col + '">' + (u*100).toFixed(1) + '%</span></div>' +
       '<div class="util-bar-bg"><div class="util-bar-fg" style="width:' + Math.min(100, u*100) + '%;background:' + col + '"></div></div>' +
-      '<div class="sc-row"><span class="sc-label">Model Util</span><span class="sc-val" style="color:' + qtCol + '">' + (qt*100).toFixed(1) + '%</span></div>' +
+      '<div class="sm-row"><span class="sm-label">Model Util</span><span class="sm-val" style="color:' + qtCol + '">' + (qt*100).toFixed(1) + '%</span></div>' +
       '<div class="util-bar-bg"><div class="util-bar-fg" style="width:' + Math.min(100, qt*100) + '%;background:' + qtCol + '"></div></div>' +
-      '<div class="sc-row"><span class="sc-label">Rate</span><span class="sc-val">' + st.effectiveRate.toFixed(1) + ' u/m</span></div>' +
-      '<div class="sc-row"><span class="sc-label">Processed</span><span class="sc-val">' + st.totalProcessed.toLocaleString() + '</span></div>' +
-      '<div class="sc-status">' + statusLabel + '</div>' +
+      '<div class="sm-row"><span class="sm-label">Rate</span><span class="sm-val">' + st.effectiveRate.toFixed(1) + ' p/m</span></div>' +
+      '<div class="sm-row"><span class="sm-label">Processed</span><span class="sm-val">' + st.totalProcessed.toLocaleString() + '</span></div>' +
+      '<div style="text-align:center;font-size:9px;padding-top:3px;font-weight:600;">' + statusLabel + '</div>' +
       '</div>';
   });
-  stationCardsEl.innerHTML = cards;
-  // Set container height from tallest card
-  const cardEls = stationCardsEl.querySelectorAll('.station-card');
-  cardEls.forEach(c => { if (c.offsetHeight > maxCardH) maxCardH = c.offsetHeight; });
-  stationCardsEl.style.height = maxCardH + 'px';
+  stationMetricsEl.innerHTML = smHtml;
 
   // Event log
   let logHtml = '';
@@ -1238,7 +1217,7 @@ function updateUtilLegend() {
 }
 
 // Log initial event
-logEvent('info', 'Simulation started — ' + engine.stations.length + ' stations, target: ' + engine.target.toLocaleString() + ' units');
+logEvent('info', 'Simulation started — ' + engine.stations.length + ' stations, target: ' + engine.target.toLocaleString() + ' products');
 
 // Track production milestones
 let lastMilestone = 0;
@@ -1247,7 +1226,7 @@ function checkMilestones() {
   const milestone = Math.floor(pct / 25) * 25;
   if (milestone > lastMilestone && milestone > 0) {
     lastMilestone = milestone;
-    logEvent('info', 'Production milestone: ' + milestone + '% of target reached (' + engine.produced.toLocaleString() + ' units)');
+    logEvent('info', 'Production milestone: ' + milestone + '% of target reached (' + engine.produced.toLocaleString() + ' products)');
   }
 }
 
@@ -2202,7 +2181,7 @@ if 'result' in st.session_state:
 
     sim_json = json.dumps(sim_config)
     factory_html = FACTORY_SIM_HTML.replace("__SIM_CONFIG__", sim_json)
-    st.components.v1.html(factory_html, height=1200, scrolling=False)
+    st.components.v1.html(factory_html, height=1150, scrolling=False)
 
 
 else:
