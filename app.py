@@ -857,8 +857,8 @@ class Renderer {
     ctx.fillStyle = TEAL; ctx.fillRect(0, hudY, this.W, 2);
     const metrics = [
       { l: 'Products Produced', v: this.e.produced.toLocaleString() + ' / ' + this.e.target.toLocaleString() },
-      { l: 'Production Rate', v: this.e.rate.toFixed(1) + ' prod/min' },
-      { l: 'Target Rate', v: this.e.requiredRate.toFixed(1) + ' prod/min' },
+      { l: 'Production Rate', v: this.e.rate.toFixed(1) + ' products/min' },
+      { l: 'Target Rate', v: this.e.requiredRate.toFixed(1) + ' products/min' },
       { l: 'Bottleneck', v: this.e.stations[this.e.bnIdx].name },
       { l: 'Progress', v: Math.min(100, (this.e.produced / this.e.target * 100)).toFixed(1) + '%' },
     ];
@@ -1062,7 +1062,7 @@ function updateDashboard() {
       '<div class="util-bar-bg"><div class="util-bar-fg" style="width:' + Math.min(100, u*100) + '%;background:' + col + '"></div></div>' +
       '<div class="sm-row"><span class="sm-label">Model Util</span><span class="sm-val" style="color:' + qtCol + '">' + (qt*100).toFixed(1) + '%</span></div>' +
       '<div class="util-bar-bg"><div class="util-bar-fg" style="width:' + Math.min(100, qt*100) + '%;background:' + qtCol + '"></div></div>' +
-      '<div class="sm-row"><span class="sm-label">Rate</span><span class="sm-val">' + st.effectiveRate.toFixed(1) + ' p/m</span></div>' +
+      '<div class="sm-row"><span class="sm-label">Rate</span><span class="sm-val">' + st.effectiveRate.toFixed(1) + ' products/min</span></div>' +
       '<div class="sm-row"><span class="sm-label">Processed</span><span class="sm-val">' + st.totalProcessed.toLocaleString() + '</span></div>' +
       '<div style="text-align:center;font-size:9px;padding-top:3px;font-weight:600;">' + statusLabel + '</div>' +
       '</div>';
@@ -1513,7 +1513,7 @@ with c2:
 with c3:
     required_rate = production_target / (shift_hours * 60)
     st.markdown("##### 📊 Required Rate")
-    st.metric("Output needed", f"{required_rate:.1f} u/min")
+    st.metric("Output needed", f"{required_rate:.1f} products/min")
     st.caption("Auto-calculated from your target and shift duration")
 
 st.markdown("##### ⚙️ Your Production Stages")
