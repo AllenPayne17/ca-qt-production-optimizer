@@ -2297,6 +2297,51 @@ if 'result' in st.session_state:
     st.components.v1.html(factory_html, height=1150, scrolling=False)
 
 
+    # ==================================================================
+    # SECTION 7: OPTIMIZED FACTORY SIMULATION
+    # ==================================================================
+
+    st.markdown("---")
+    st.markdown("## Step 7: Watch Your Optimized Factory in Action")
+    st.markdown(
+        "See the **recommended production line** running in real time. "
+        "Compare how smoothly products flow with the optimized machine allocation "
+        "versus your current setup above."
+    )
+
+    # Simulate the RECOMMENDED factory setup (from CA+QT optimizer)
+    opt_system_cap = min(
+        (recipes_used[i]['output_qty'] / recipes_used[i]['time'])
+        * scalings_used[i] * sol[i]
+        for i in range(ns)
+    )
+    opt_sim_arrival = opt_system_cap * 0.95
+    opt_sim_config = {
+        "stations": [],
+        "requiredRate": float(rr),
+        "systemCapacity": float(opt_sim_arrival),
+        "shiftMinutes": int(st.session_state.get('shift_hours', 12) * 60),
+        "productionTarget": int(rr * st.session_state.get('shift_hours', 12) * 60),
+    }
+    for i in range(ns):
+        qm_rec = m['qm'][i]
+        recipe = recipes_used[i]
+        opt_sim_config["stations"].append({
+            "name": snames[i],
+            "machineCount": int(sol[i]),
+            "outputQty": int(recipe['output_qty']),
+            "cycleTime": float(recipe['time']),
+            "scalingFactor": float(scalings_used[i]),
+            "utilization": float(qm_rec['utilization']),
+            "serviceRate": float(qm_rec['service_rate']),
+            "arrivalRate": float(qm_rec['arrival_rate']),
+        })
+
+    opt_sim_json = json.dumps(opt_sim_config)
+    opt_factory_html = FACTORY_SIM_HTML.replace("__SIM_CONFIG__", opt_sim_json)
+    st.components.v1.html(opt_factory_html, height=1150, scrolling=False)
+
+
 else:
     st.markdown("---")
     st.info("👆 Configure your production line above, then click **Run Optimizer** to get started.")
